@@ -29,12 +29,8 @@ public struct CursorPose: Hashable, Sendable {
     /// Hotspot position in pixels.
     public var x: Double
     public var y: Double
-    /// Sprite size in pixels.
-    public var width: Double
-    public var height: Double
-    /// Hotspot offset within the sprite, normalized 0...1.
-    public var hotSpotX: Double
-    public var hotSpotY: Double
+    /// Pixels per cursor point (cursor size setting × zoom × click squash).
+    public var scale: Double
     public var rotation: Double
     public var opacity: Double
 }

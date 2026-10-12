@@ -33,7 +33,7 @@ let package = Package(
         // ScreenCaptureKit recorder, input events, segmented writer.
         .target(name: "Capture", dependencies: ["PlaygroundCore"]),
         // Synthetic fixtures for tests and pgctl.
-        .target(name: "TestSupport", dependencies: ["PlaygroundCore", "Capture"]),
+        .target(name: "TestSupport", dependencies: ["PlaygroundCore"]),
 
         .testTarget(name: "PlaygroundCoreTests", dependencies: ["PlaygroundCore"]),
         .testTarget(name: "TimelineTests", dependencies: ["Timeline"]),

@@ -99,16 +99,12 @@ public enum SceneEvaluator {
         let mainQuad = quad(for: center)
 
         // Cursor
-        let cursorID = src.flatMap { snap.cursor.cursorID(at: $0.time.seconds) }
-        let info = cursorInfo(snap: snap, id: cursorID, alwaysPointer: cfg.cursor.alwaysUsePointer)
+        let cursorID = cfg.cursor.alwaysUsePointer ? nil : src.flatMap { snap.cursor.cursorID(at: $0.time.seconds) }
         func pose(_ m: MotionSample) -> CursorPose {
             let q = quad(for: m)
             let p = cropAdjusted(m.cursor, cfg.output.crop)
             let ppp = q.width / max(snap.manifest.captureRect.width * cfg.output.crop.width, 1)
-            let size = cfg.cursor.size * m.clickScale * ppp
-            return CursorPose(x: q.x + p.x * q.width, y: q.y + p.y * q.height,
-                              width: info.width * size, height: info.height * size,
-                              hotSpotX: info.hotSpotX / max(info.width, 1), hotSpotY: info.hotSpotY / max(info.height, 1),
+            return CursorPose(x: q.x + p.x * q.width, y: q.y + p.y * q.height, scale: cfg.cursor.size * m.clickScale * ppp,
                               rotation: m.cursorRotation, opacity: m.cursorOpacity)
         }
         var cursorPoses: [CursorPose] = []
@@ -177,7 +173,7 @@ public enum SceneEvaluator {
             shadow: shadow, insetWidth: cfg.frame.insetEnabled ? cfg.frame.inset * shortScale(short) : 0,
             insetColor: RGBAColor(r: cfg.frame.insetColor.r, g: cfg.frame.insetColor.g, b: cfg.frame.insetColor.b,
                                   a: cfg.frame.insetOpacity),
-            cursorID: info.id, cursorPoses: cursorPoses, clickEffects: effects, masks: masks, loupe: loupe,
+            cursorID: cursorID, cursorPoses: cursorPoses, clickEffects: effects, masks: masks, loupe: loupe,
             camera: camera, screenOpacity: layout.screenVisible ? 1 : 0)
     }
 
@@ -220,14 +216,4 @@ public enum SceneEvaluator {
         return NormRect(x: 0, y: (1 - hgt) / 2, width: 1, height: hgt)
     }
 
-    struct ResolvedCursor { var id: String?; var width: Double; var height: Double; var hotSpotX: Double; var hotSpotY: Double }
-
-    static func cursorInfo(snap: RenderSnapshot, id: String?, alwaysPointer: Bool) -> ResolvedCursor {
-        let arrow = ResolvedCursor(id: "arrow", width: 17, height: 23, hotSpotX: 4, hotSpotY: 4)
-        if alwaysPointer { return arrow }
-        if let id, let info = snap.cursorImages[id] {
-            return ResolvedCursor(id: id, width: info.width, height: info.height, hotSpotX: info.hotSpotX, hotSpotY: info.hotSpotY)
-        }
-        return arrow
-    }
 }
