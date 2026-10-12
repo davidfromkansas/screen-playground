@@ -70,6 +70,20 @@ public struct TimeMap: Sendable {
         return out
     }
 
+    /// Source intervals shown during an output range (one per overlapping slice, in order).
+    public func sourceRanges(for range: OutputRange) -> [SourceRange] {
+        var out: [SourceRange] = []
+        for (i, s) in slices.enumerated() where s.freezeDuration == nil {
+            let a = max(range.start.seconds, outputStarts[i])
+            let b = min(range.end.seconds, outputStarts[i] + s.outputDuration)
+            guard b > a else { continue }
+            let sa = s.source.start.seconds + (a - outputStarts[i]) / s.timeScale
+            let sb = s.source.start.seconds + (b - outputStarts[i]) / s.timeScale
+            out.append(SourceRange(sa, min(sb, s.source.end.seconds)))
+        }
+        return out
+    }
+
     /// The slice at output time `t`, if any.
     public func slice(at t: OutputTime) -> Slice? { sliceIndex(at: t).map { slices[$0] } }
 

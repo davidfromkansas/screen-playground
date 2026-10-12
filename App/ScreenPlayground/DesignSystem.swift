@@ -21,6 +21,7 @@ enum Theme {
     static let clipText = Color(red: 0.29, green: 0.2, blue: 0.0)           // #4A3300
     static let zoom = Color(red: 0.416, green: 0.353, blue: 0.91)           // #6A5AE8
     static let mask = Color(red: 0.165, green: 0.616, blue: 0.576)          // #2A9D93
+    static let caption = Color(red: 0.86, green: 0.33, blue: 0.53)          // #DB5487
     static let layout = Color(red: 0.851, green: 0.349, blue: 0.549)
     static let success = Color(red: 0.204, green: 0.78, blue: 0.349)        // #34C759
 

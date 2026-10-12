@@ -183,4 +183,36 @@ public enum Edits {
         for i in out.zooms.indices { out.zooms[i].level = level }
         return out
     }
+
+    // MARK: Captions (source-time ranges, so cuts and speed changes never shift them)
+
+    /// Adds a caption; overlapping captions are trimmed so only one shows at a time.
+    public static func addCaption(_ scene: Scene, source: SourceRange, text: String) -> (Scene, ItemID) {
+        var s = scene
+        let caption = CaptionRange(source: source, text: text)
+        s.captions = s.captions.compactMap { c in
+            var c = c
+            if c.source.start < source.start && c.source.end > source.start { c.source = SourceRange(c.source.start.seconds, source.start.seconds) }
+            else if c.source.start >= source.start && c.source.start < source.end {
+                guard c.source.end > source.end else { return nil }
+                c.source = SourceRange(source.end.seconds, c.source.end.seconds)
+            }
+            return c.source.duration > 0.05 ? c : nil
+        }
+        s.captions.append(caption)
+        s.captions.sort { $0.source.start < $1.source.start }
+        return (s, caption.id)
+    }
+
+    public static func updateCaption(_ scene: Scene, id: ItemID, _ change: (inout CaptionRange) -> Void) -> Scene {
+        var s = scene
+        if let i = s.captions.firstIndex(where: { $0.id == id }) { change(&s.captions[i]) }
+        return s
+    }
+
+    public static func removeCaption(_ scene: Scene, id: ItemID) -> Scene {
+        var s = scene
+        s.captions.removeAll { $0.id == id }
+        return s
+    }
 }

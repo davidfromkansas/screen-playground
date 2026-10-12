@@ -59,6 +59,23 @@ e8() { "$PGCTL" export "$FIX" "$OUT/E8-loop.mp4" --aspect 1:1 --cut 6:8 --res 10
        && "$PGCTL" export "$FIX" "$OUT/E8-loop.gif" --aspect 1:1 --cut 6:8 && [[ -s "$OUT/E8-loop.gif" ]]; }
 run "E8 square loop + GIF" e8
 
+# E13 Agent — saved edits from the CLI: captions, zoom, idle cut, then frames to review and an export.
+e13() {
+  local P="$OUT/E13.screenplayground"; rm -rf "$P"
+  "$PGCTL" make-fixture "$P" --duration 8 >/dev/null &&
+  "$PGCTL" --json edit "$P" --auto-zoom --caption '1:3:Open the dashboard' --zoom 4:6:2.5:0.7,0.3 --output-time --cut 6.5:7.5 \
+    | jq -e '.captions == 1 and .outputDuration > 6.9 and .outputDuration < 7.1' &&
+  "$PGCTL" --json info "$P" | jq -e '(.captions | length) == 1 and (.cuts | length) == 1' &&
+  "$PGCTL" --json frames "$P" --every 2 --out "$OUT/E13-frames" | jq -e '(.frames | length) >= 3' &&
+  [[ -s "$OUT/E13-frames/contact-sheet.jpg" ]] &&
+  "$PGCTL" export "$P" "$OUT/E13-agent.mp4" --res 720 --fps 30 && check_mp4 "$OUT/E13-agent.mp4" 1280 720 30 6.9 7.1
+}
+run "E13 agent edits (captions, zoom, cut, frames)" e13
+
+# JSON errors for agents: a bad edit exits non-zero with a machine-readable code.
+ejson() { ! "$PGCTL" --json edit "$FIX" --caption 'oops' > "$OUT/err.json" && jq -e '.error.code == "bad-request"' "$OUT/err.json"; }
+run "JSON error output" ejson
+
 # Frame render sanity.
 fr() { "$PGCTL" render-frame "$FIX" 2.0 "$OUT/frame.png" --auto-zoom && [[ -s "$OUT/frame.png" ]]; }
 run "render frame" fr

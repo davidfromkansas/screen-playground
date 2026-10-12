@@ -35,7 +35,7 @@ enum EditorPanel: String, CaseIterable, Identifiable {
 }
 
 enum EditorSelection: Equatable {
-    case slice(ItemID), zoom(ItemID), mask(ItemID)
+    case slice(ItemID), zoom(ItemID), mask(ItemID), caption(ItemID)
 }
 
 /// State of one open project in the editor.
@@ -175,6 +175,7 @@ final class EditorModel {
         case let .slice(id)?: if !doc.scene.slices.contains(where: { $0.id == id }) { selection = nil }
         case let .zoom(id)?: if !doc.scene.zooms.contains(where: { $0.id == id }) { selection = nil }
         case let .mask(id)?: if !doc.scene.masks.contains(where: { $0.id == id }) { selection = nil }
+        case let .caption(id)?: if !doc.scene.captions.contains(where: { $0.id == id }) { selection = nil }
         case nil: break
         }
     }
@@ -359,6 +360,7 @@ final class EditorModel {
         case let .slice(id): edit("Delete clip") { try Edits.remove($0, sliceID: id) }
         case let .zoom(id): update("Remove zoom") { $0.scene = Edits.removeZoom($0.scene, id: id) }
         case let .mask(id): update("Remove mask") { $0.scene.masks.removeAll { $0.id == id } }
+        case let .caption(id): update("Remove caption") { $0.scene = Edits.removeCaption($0.scene, id: id) }
         case nil: return
         }
         selection = nil
@@ -377,6 +379,19 @@ final class EditorModel {
         let mask = MaskRange(source: SourceRange(src.time.seconds, min(src.time.seconds + 3, recordingDuration)), kind: kind)
         update("Add mask") { $0.scene.masks.append(mask) }
         selection = .mask(mask.id)
+    }
+
+    func addCaption(at t: Double? = nil) {
+        guard let snap = snapshot, let src = snap.timeMap.source(at: OutputTime(t ?? time)) else { return }
+        let range = SourceRange(src.time.seconds, min(src.time.seconds + 3, recordingDuration))
+        guard range.duration > 0.3 else { NSSound.beep(); return }
+        var newID: ItemID?
+        update("Add caption") { doc in
+            let (scene, id) = Edits.addCaption(doc.scene, source: range, text: "Caption")
+            doc.scene = scene
+            newID = id
+        }
+        if let newID { selection = .caption(newID) }
     }
 
     /// Moves or resizes a zoom (output times). Zooms stay side by side: the result is clamped between

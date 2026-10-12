@@ -23,6 +23,8 @@ struct PGCtl {
             case "record": try LiveCommands.record(args)
             case "mark": try LiveCommands.mark(args)
             case "install": try Installer.run(args)
+            case "edit": try await EditCommands.edit(args)
+            case "frames": try await EditCommands.frames(args)
             case "make-fixture": try await makeFixture(args)
             case "export": try await export(args)
             case "render-frame": try await renderFrame(args)
@@ -56,6 +58,11 @@ struct PGCtl {
           pgctl info <project>
           pgctl export <project> <out.mp4|.gif|.mov> [--res 720|1080|1440|2160] [--fps 60] [--quality studio|social|web|webLow]
                        [--aspect auto|16:9|9:16|1:1|4:3|3:4|4:5] [--cut from:to] [--speed from:to:x] [--auto-zoom] [--preset file]
+          pgctl edit <project> [--caption from:to:"text"] [--zoom from:to[:level[:x,y]]] [--cut from:to] [--speed from:to:x]
+                     [--cut-idle 1.5] [--apply-marks] [--auto-zoom] [--preset file] [--aspect 9:16]
+                     [--clear-captions] [--clear-zooms] [--output-time]   saves the project (times are source seconds
+                     unless --output-time)
+          pgctl frames <project> [--every 2] [--res 540] [--out DIR]   PNGs + a contact sheet to review the result
           pgctl render-frame <project> <seconds> <out.png> [--res 1080]
           pgctl make-fixture <out.screenplayground> [--duration 6] [--clicks 1.5,2.2,4]
         """)
@@ -184,6 +191,10 @@ struct PGCtl {
                        "keys": .number(Double(project.events.keys.count)), "marks": .number(Double(project.bundle.loadMarks().count))],
             "clips": .array(scene.slices.map { ["source": ["from": r2($0.source.start.seconds), "to": r2($0.source.end.seconds)], "speed": r2($0.speed)] }),
             "zooms": .array(scene.zooms.map { ["output": outputRanges($0.source), "level": r2($0.level), "auto": .bool($0.isAuto)] }),
+            "captions": .array(scene.captions.map { ["output": outputRanges($0.source), "text": .string($0.text)] }),
+            "cuts": .array(zip(scene.slices, scene.slices.dropFirst()).compactMap { a, b in
+                b.source.start.seconds - a.source.end.seconds > 0.01
+                    ? ["source": ["from": r2(a.source.end.seconds), "to": r2(b.source.start.seconds)]] : nil }),
         ]
         Output.emit(json) {
             """
@@ -192,7 +203,7 @@ struct PGCtl {
             duration:  \(String(format: "%.2f", m.duration))s   source: \(Int(project.sourcePixelSize.width))×\(Int(project.sourcePixelSize.height))
             channels:  \(m.channels.map(\.kind.rawValue).joined(separator: ", "))
             events:    \(project.events.moves.count) moves, \(project.events.downClicks.count) clicks, \(project.events.keys.count) keys, \(project.events.cursors.count) cursors
-            edit:      \(scene.slices.count) clips, \(scene.zooms.count) zooms, output \(String(format: "%.2f", map.duration))s
+            edit:      \(scene.slices.count) clips, \(scene.zooms.count) zooms, \(scene.captions.count) captions, output \(String(format: "%.2f", map.duration))s
             """
         }
     }

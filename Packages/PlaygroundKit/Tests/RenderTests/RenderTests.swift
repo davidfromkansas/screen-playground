@@ -81,6 +81,27 @@ import Timeline
         #expect(SceneEvaluator.evaluate(snap, at: OutputTime(3.5), width: 1280, height: 720).keycaps == nil)
     }
 
+    @Test func captionPillAndKeycapsAboveIt() throws {
+        var snap = snapshot {
+            $0.config.shortcuts.enabled = true
+            $0.scene.captions = [CaptionRange(source: SourceRange(1, 4), text: "Create your account in one click — no credit card needed")]
+        }
+        snap.shortcuts = [ShortcutEvent(t: 1.8, index: 0, keys: ["⌘", "K"])]
+        let ctx = try #require(MetalContext.shared)
+        let comp = Compositor(context: ctx)
+        let frame = SceneEvaluator.evaluate(snap, at: OutputTime(2.2), width: 1280, height: 720)
+        let caption = try #require(frame.caption)
+        #expect(caption.opacity == 1)
+        let caps = try #require(frame.keycaps)
+        #expect(caps.bottomY < caption.bottomY - caption.fontSize, "keycaps move up above the caption")
+        let screen = FixtureFactory.screenImage(width: 1920, height: 1080, frameIndex: 1).flatMap(ImageIOHelpers.pixelBuffer)
+        let img = try #require(comp.renderImage(frame, screen: screen, cursorSet: .system))
+        ImageIOHelpers.writePNG(img, to: Self.outDir.appendingPathComponent("caption.png"))
+        // Fades at the edges, gone outside the range.
+        #expect((SceneEvaluator.evaluate(snap, at: OutputTime(1.1), width: 1280, height: 720).caption?.opacity ?? 0) < 0.6)
+        #expect(SceneEvaluator.evaluate(snap, at: OutputTime(4.2), width: 1280, height: 720).caption == nil)
+    }
+
     @Test func barcodeRoundTrip() throws {
         let img = try #require(FixtureFactory.screenImage(width: 640, height: 360, frameIndex: 1234))
         let pb = try #require(ImageIOHelpers.pixelBuffer(from: img))

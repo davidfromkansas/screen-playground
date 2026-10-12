@@ -33,6 +33,7 @@ struct SidebarView: View {
         case let .zoom(id)?: "zoom-\(id)"
         case let .slice(id)?: "slice-\(id)"
         case let .mask(id)?: "mask-\(id)"
+        case let .caption(id)?: "caption-\(id)"
         case nil: "panel-\(model.panel)"
         }
     }
@@ -44,6 +45,7 @@ struct SidebarView: View {
                 case let .zoom(id)?: ZoomInspector(model: model, id: id)
                 case let .slice(id)?: SliceInspector(model: model, id: id)
                 case let .mask(id)?: MaskInspector(model: model, id: id)
+                case let .caption(id)?: CaptionInspector(model: model, id: id)
                 case nil:
                     switch model.panel {
                     case .background: BackgroundPanel(model: model)
@@ -638,6 +640,27 @@ struct MaskInspector: View {
                 PanelSection(title: "Dim amount") {
                     ResettableSlider(value: model.item(\.masks, id, \.opacity, fallback: mask.opacity, "Highlight"), range: 0.1...0.95, defaultValue: 0.7)
                 }
+            }
+        }
+    }
+}
+
+struct CaptionInspector: View {
+    var model: EditorModel
+    var id: ItemID
+
+    var body: some View {
+        if let caption = model.doc.scene.captions.first(where: { $0.id == id }) {
+            InspectorHeader(title: "Caption", model: model)
+            PanelSection(title: "Text") {
+                TextField("Caption", text: model.item(\.captions, id, \.text, fallback: caption.text, "Caption text"), axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                Text("Shown at the bottom of the video. Drag the caption's edges on the timeline to change when it shows.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.secondaryText)
+            }
+            PanelSection(title: "Size") {
+                ResettableSlider(value: model.binding(\.config.captions.size, "Caption size"), range: 0.6...1.8, defaultValue: 1)
             }
         }
     }

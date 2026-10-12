@@ -14,7 +14,9 @@ struct TimelineView: View {
     static let zoomH: CGFloat = 34
     static let maskY: CGFloat = 134
     static let maskH: CGFloat = 26
-    static let totalH: CGFloat = 168
+    static let captionY: CGFloat = 166
+    static let captionH: CGFloat = 26
+    static let totalH: CGFloat = 198
     static let inset: CGFloat = 16
 
     var body: some View {
@@ -41,12 +43,20 @@ struct TimelineView: View {
                     if model.doc.scene.zooms.isEmpty {
                         hint("Click to add a zoom", y: Self.zoomY, h: Self.zoomH)
                     }
+                    trackBackground(y: Self.captionY, h: Self.captionH, width: contentW)
+                        .gesture(SpatialTapGesture(coordinateSpace: .named("timeline")).onEnded { v in
+                            model.addCaption(at: (v.location.x - Self.inset) / pps)
+                        })
                     if model.doc.scene.masks.isEmpty {
                         hint("Click to add a mask or highlight", y: Self.maskY, h: Self.maskH)
+                    }
+                    if model.doc.scene.captions.isEmpty {
+                        hint("Click to add a caption", y: Self.captionY, h: Self.captionH)
                     }
                     clips(map: map, pps: pps)
                     zooms(map: map, pps: pps)
                     masks(map: map, pps: pps)
+                    captions(map: map, pps: pps)
                     Playhead(height: Self.totalH)
                         .offset(x: Self.inset + model.time * pps - Playhead.hitWidth / 2)
                         .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline")).onChanged { v in
@@ -147,6 +157,35 @@ struct TimelineView: View {
                 }
                 .frame(width: w, height: Self.maskH)
                 .offset(x: x, y: Self.maskY)
+            }
+        }
+    }
+}
+
+extension TimelineView {
+    // MARK: Captions
+
+    @ViewBuilder func captions(map: TimeMap, pps: Double) -> some View {
+        ForEach(model.doc.scene.captions) { caption in
+            let ranges = map.outputRanges(for: caption.source)
+            if let first = ranges.first, let last = ranges.last {
+                let x = Self.inset + first.start.seconds * pps
+                let w = max((last.end.seconds - first.start.seconds) * pps, 14)
+                RangeBlock(model: model, kind: .caption(caption.id), color: Theme.caption, disabled: false,
+                           title: "Caption", subtitle: caption.text, icon: "captions.bubble",
+                           outputStart: first.start.seconds, outputEnd: last.end.seconds, pps: pps) { start, end in
+                    model.update("Move caption", coalesce: true) { doc in
+                        guard let i = doc.scene.captions.firstIndex(where: { $0.id == caption.id }),
+                              let s = map.source(at: OutputTime(start))?.time, let e = map.source(at: OutputTime(end))?.time,
+                              e.seconds - s.seconds >= 0.3 else { return }
+                        doc.scene.captions[i].source = SourceRange(s, e)
+                    }
+                }
+                .contextMenu {
+                    Button("Remove", role: .destructive) { model.update("Remove caption") { $0.scene = Edits.removeCaption($0.scene, id: caption.id) } }
+                }
+                .frame(width: w, height: Self.captionH)
+                .offset(x: x, y: Self.captionY)
             }
         }
     }

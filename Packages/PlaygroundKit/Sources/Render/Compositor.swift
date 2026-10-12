@@ -17,6 +17,7 @@ public final class Compositor: @unchecked Sendable {
     private var backgroundCache: (key: String, texture: MTLTexture)?
     private var imageCache: [String: MTLTexture] = [:]
     private var keycapCache: (key: String, texture: MTLTexture, size: CGSize)?
+    private var captionCache: (key: String, texture: MTLTexture, size: CGSize)?
     private var accum: MTLTexture?
     private var scratchA: MTLTexture?
     private var scratchB: MTLTexture?
@@ -128,6 +129,19 @@ public final class Compositor: @unchecked Sendable {
                     u.color = e.kind == .circle ? SIMD4(0.25, 0.22, 0.85, 0.9) : SIMD4(0.42, 0.36, 1.0, 0.85)
                     draw(enc, u, pipeline: context.overPipeline)
                 }
+            }
+        }
+
+        // 7b. Caption
+        if let cap = frame.caption, cap.opacity > 0.01, let (tex, size) = captionTexture(cap) {
+            pass(cb, target: target, load: .load) { enc in
+                var u = LayerUniforms()
+                u.mode = LayerMode.texture.rawValue
+                u.canvas = canvas
+                u.rect = SIMD4(Float(cap.centerX - size.width / 2), Float(cap.bottomY - size.height), Float(size.width), Float(size.height))
+                u.params = SIMD4(0, 2, 0, 0) // premultiplied RGBA
+                u.opacity = Float(cap.opacity)
+                draw(enc, u, texture: tex, pipeline: context.overPipeline)
             }
         }
 
@@ -402,6 +416,17 @@ public final class Compositor: @unchecked Sendable {
         else { return nil }
         let size = CGSize(width: img.width, height: img.height)
         keycapCache = (key, tex, size)
+        return (tex, size)
+    }
+
+    private func captionTexture(_ cap: CaptionDesc) -> (MTLTexture, CGSize)? {
+        let key = "\(cap.text)@\(Int(cap.fontSize))/\(Int(cap.maxWidth))"
+        if let c = captionCache, c.key == key { return (c.texture, c.size) }
+        guard let img = CaptionArt.image(text: cap.text, fontSize: cap.fontSize, maxWidth: cap.maxWidth),
+              let tex = try? loader.newTexture(cgImage: img, options: [.SRGB: false, .textureStorageMode: MTLStorageMode.private.rawValue])
+        else { return nil }
+        let size = CGSize(width: img.width, height: img.height)
+        captionCache = (key, tex, size)
         return (tex, size)
     }
 

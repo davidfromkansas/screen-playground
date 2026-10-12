@@ -84,6 +84,18 @@ public struct KeycapDesc: Hashable, Sendable {
     public var opacity: Double
 }
 
+/// A caption: wrapped text on a dark pill, bottom centre.
+public struct CaptionDesc: Hashable, Sendable {
+    public var text: String
+    public var centerX: Double
+    public var bottomY: Double
+    /// Font size in pixels.
+    public var fontSize: Double
+    /// Maximum pill width in pixels (text wraps).
+    public var maxWidth: Double
+    public var opacity: Double
+}
+
 /// Everything the compositor needs to draw one output frame. Plain values, no GPU types.
 public struct FrameDescription: Sendable {
     public var width: Int
@@ -106,6 +118,7 @@ public struct FrameDescription: Sendable {
     public var loupe: LoupeDesc?
     public var camera: CameraDesc?
     public var keycaps: KeycapDesc?
+    public var caption: CaptionDesc? = nil
     /// Screen layer opacity (0 for camera-only layouts).
     public var screenOpacity: Double
 }

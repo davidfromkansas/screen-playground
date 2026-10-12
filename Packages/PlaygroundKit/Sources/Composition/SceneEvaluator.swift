@@ -178,11 +178,21 @@ public enum SceneEvaluator {
                                 offsetX: cfg.frame.shadowStyle == .directional ? cos(angle) * dist : 0,
                                 offsetY: cfg.frame.shadowStyle == .directional ? sin(angle) * dist : dist)
 
-        // Keyboard shortcut overlay (bottom centre, above any captions).
+        // Caption (bottom centre), fading over 0.2 s at each end of its range.
+        var caption: CaptionDesc?
+        if let c = snap.document.scene.captions.first(where: { $0.source.contains(sourceTime) }) {
+            let fade = 0.2
+            let alpha = min(1, (sourceTime.seconds - c.source.start.seconds) / fade, (c.source.end.seconds - sourceTime.seconds) / fade)
+            caption = CaptionDesc(text: c.text, centerX: w / 2, bottomY: h - short * 0.06, fontSize: short * 0.046 * cfg.captions.size,
+                                  maxWidth: w * 0.8, opacity: max(0, alpha))
+        }
+
+        // Keyboard shortcut overlay (bottom centre, above any caption).
         var keycaps: KeycapDesc?
         if !snap.shortcuts.isEmpty, let (sc, alpha) = ShortcutDetector.active(snap.shortcuts, at: sourceTime.seconds) {
             let height = short * 0.065 * cfg.shortcuts.size
-            keycaps = KeycapDesc(keys: sc.keys, centerX: w / 2, bottomY: h - short * 0.06, height: height, opacity: alpha)
+            let lift = caption.map { $0.fontSize * 2.4 + short * 0.02 } ?? 0
+            keycaps = KeycapDesc(keys: sc.keys, centerX: w / 2, bottomY: h - short * 0.06 - lift, height: height, opacity: alpha)
         }
 
         return FrameDescription(
@@ -192,7 +202,7 @@ public enum SceneEvaluator {
             insetColor: RGBAColor(r: cfg.frame.insetColor.r, g: cfg.frame.insetColor.g, b: cfg.frame.insetColor.b,
                                   a: cfg.frame.insetOpacity),
             cursorID: cursorID, cursorPoses: cursorPoses, clickEffects: effects, masks: masks, loupe: loupe,
-            camera: camera, keycaps: keycaps, screenOpacity: layout.screenVisible ? 1 : 0)
+            camera: camera, keycaps: keycaps, caption: caption, screenOpacity: layout.screenVisible ? 1 : 0)
     }
 
     static func shortScale(_ short: Double) -> Double { short / 1080 }

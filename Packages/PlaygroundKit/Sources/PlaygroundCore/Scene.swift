@@ -110,6 +110,19 @@ public struct MaskRange: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+/// On-screen text shown over a source range (e.g. a demo script's step captions).
+public struct CaptionRange: Hashable, Codable, Sendable, Identifiable {
+    public var id: ItemID
+    public var source: SourceRange
+    public var text: String
+
+    public init(id: ItemID = makeItemID(), source: SourceRange, text: String) {
+        self.id = id
+        self.source = source
+        self.text = text
+    }
+}
+
 /// One recording plus all edits on it. Projects can hold several scenes (multi-clip, post-v1).
 public struct Scene: Hashable, Codable, Sendable, Identifiable {
     public var id: ItemID = makeItemID()
@@ -118,6 +131,7 @@ public struct Scene: Hashable, Codable, Sendable, Identifiable {
     public var zooms: [ZoomRange] = []
     public var layouts: [LayoutRange] = []
     public var masks: [MaskRange] = []
+    public var captions: [CaptionRange] = []
     /// Keystroke indices hidden from the shortcut overlay.
     public var hiddenShortcutIndices: Set<Int> = []
 
