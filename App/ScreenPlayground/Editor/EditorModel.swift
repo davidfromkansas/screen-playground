@@ -227,7 +227,7 @@ final class EditorModel {
         guard audioDirty, let project else { return }
         audioDirty = false
         guard let result = try? await AudioCompositionBuilder.build(document: doc, sources: project.audioSources,
-                                                                    backgroundMusic: project.backgroundMusicURL),
+                                                                    backgroundMusic: LoadedProject.backgroundMusicURL(for: doc)),
               result.hasAudio else {
             audioPlayer = nil
             return

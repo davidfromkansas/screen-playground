@@ -84,4 +84,33 @@ import Timeline
         let src = try #require(CGImageSourceCreateWithURL(gif as CFURL, nil))
         #expect(CGImageSourceGetCount(src) == 144)
     }
+
+    /// Regression: export must use the edited document's music, not the project as it was loaded.
+    @Test func musicFollowsEditedDocument() async throws {
+        let bundle = try await FixtureFactory.makeProject(at: Self.tempURL("Music.screenplayground"))
+        // A 2-second 440 Hz tone as the "song".
+        let toneURL = Self.tempURL("tone.caf")
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+        let file = try AVAudioFile(forWriting: toneURL, settings: format.settings)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 96000)!
+        buffer.frameLength = 96000
+        for ch in 0..<2 { for i in 0..<96000 { buffer.floatChannelData![ch][i] = 0.3 * sin(Float(i) * 2 * .pi * 440 / 48000) } }
+        try file.write(from: buffer)
+
+        var project = try await LoadedProject.load(bundle)
+        project.document.config.audio.backgroundMusicPath = toneURL.path   // as loaded: has music
+        var settings = ExportSettings()
+        settings.resolution = .p720
+        settings.fps = 30
+
+        var withoutMusic = project.document
+        withoutMusic.config.audio.backgroundMusicPath = nil                 // edit removes it
+        let silent = Self.tempURL("silent.mp4")
+        try await Exporter(project: project, document: withoutMusic, settings: settings).run(to: silent)
+        #expect(try await AVURLAsset(url: silent).loadTracks(withMediaType: .audio).isEmpty)
+
+        let loud = Self.tempURL("music.mp4")
+        try await Exporter(project: project, document: project.document, settings: settings).run(to: loud)
+        #expect(try await AVURLAsset(url: loud).loadTracks(withMediaType: .audio).count == 1)
+    }
 }

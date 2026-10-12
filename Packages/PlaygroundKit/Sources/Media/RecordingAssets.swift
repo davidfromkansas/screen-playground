@@ -47,7 +47,8 @@ public struct LoadedProject: Sendable {
                        hasCamera: cameraURL != nil, cameraAspect: cameraAspect)
     }
 
-    public var backgroundMusicURL: URL? {
+    /// Background music for a given edit (not the document as loaded: music can change while editing).
+    public static func backgroundMusicURL(for document: ProjectDocument) -> URL? {
         guard let path = document.config.audio.backgroundMusicPath else { return nil }
         return URL(fileURLWithPath: path)
     }

@@ -85,7 +85,7 @@ public final class Exporter: @unchecked Sendable {
 
         // Audio: read the edit's audio composition through an audio-mix output.
         let audio = try await AudioCompositionBuilder.build(document: document, sources: project.audioSources,
-                                                            backgroundMusic: project.backgroundMusicURL)
+                                                            backgroundMusic: LoadedProject.backgroundMusicURL(for: document))
         var audioReader: AVAssetReader?
         var audioOutput: AVAssetReaderAudioMixOutput?
         var audioInput: AVAssetWriterInput?
