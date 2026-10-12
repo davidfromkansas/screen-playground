@@ -2,6 +2,8 @@
 
 A free, native macOS app for beautiful screen recordings: auto-zoom, a smooth re-rendered cursor, motion blur, wallpapers, a webcam overlay, and one-click MP4/GIF export. It is a clone of the feature set in [docs/FEATURES.md](docs/FEATURES.md).
 
+**Website and download:** https://davidfromkansas.github.io/screen-playground/
+
 ## Build and run
 
 Requires macOS 15+ and Xcode 26+. You also need `xcodegen` and `ffmpeg`/`jq` (the last two are only for the end-to-end tests): `brew install xcodegen ffmpeg jq`.
