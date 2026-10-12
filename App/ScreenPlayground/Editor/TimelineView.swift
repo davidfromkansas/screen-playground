@@ -342,7 +342,9 @@ struct RulerView: View {
                 p.addLine(to: CGPoint(x: x, y: size.height))
                 ctx.stroke(p, with: .color(.white.opacity(major ? 0.35 : 0.18)), lineWidth: 1)
                 if major {
-                    let label = t < 60 ? String(format: "0:%02d", Int(t)) : String(format: "%d:%02d", Int(t) / 60, Int(t) % 60)
+                    let major5 = step * 5
+                    let label = major5 < 1 ? String(format: "%d:%04.1f", Int(t) / 60, t.truncatingRemainder(dividingBy: 60))
+                        : String(format: "%d:%02d", Int(t.rounded()) / 60, Int(t.rounded()) % 60)
                     ctx.draw(Text(label).font(.system(size: 10).monospacedDigit()).foregroundStyle(Theme.secondaryText),
                              at: CGPoint(x: x, y: 7))
                 }
