@@ -155,7 +155,8 @@ final class AppModel {
 
 /// Turns a finished recording into an editable project (slices + auto-zooms).
 enum ProjectFactory {
-    static func finalize(_ bundle: ProjectBundle, config: ProjectConfig? = nil) throws {
+    /// `cutIdle`: also cut stretches with no input longer than this many seconds (agents' recordings).
+    static func finalize(_ bundle: ProjectBundle, config: ProjectConfig? = nil, cutIdle: Double? = nil) throws {
         let manifest = try bundle.loadManifest()
         var doc = (try? bundle.loadDocument()) ?? ProjectDocument()
         if let config { doc.config = config }
@@ -166,6 +167,12 @@ enum ProjectFactory {
         let events = bundle.loadEvents()
         let clicks = autoZoomClicks(events: events, manifest: manifest)
         doc.scene = AutoZoom.regenerate(doc.scene, clicks: clicks, duration: manifest.duration, config: doc.config.autoZoom)
+        // Captions, zoom hints, cuts and speed-ups dropped while recording (agents, demo scripts).
+        let marks = bundle.loadMarks()
+        if !marks.isEmpty || cutIdle != nil {
+            doc.scene = MarkEdits.apply(doc.scene, marks: marks, events: events, duration: manifest.duration,
+                                        options: MarkEdits.Options(cutIdleLongerThan: cutIdle))
+        }
         try bundle.saveDocument(doc, keepBackup: false)
     }
 

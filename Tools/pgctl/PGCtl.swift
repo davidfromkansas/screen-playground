@@ -22,6 +22,7 @@ struct PGCtl {
             case "targets": try LiveCommands.targets()
             case "record": try LiveCommands.record(args)
             case "mark": try LiveCommands.mark(args)
+            case "run": try LiveCommands.run(args)
             case "install": try Installer.run(args)
             case "edit": try await EditCommands.edit(args)
             case "frames": try await EditCommands.frames(args)
@@ -29,7 +30,9 @@ struct PGCtl {
             case "export": try await export(args)
             case "render-frame": try await renderFrame(args)
             case "info": try await info(args)
-            case "help", "--help", "-h": usage(exitCode: 0)
+            case "help", "--help", "-h":
+                if args.first == "script" { print(ScriptHelp.text); exit(0) }
+                usage(exitCode: 0)
             default: usage()
             }
         } catch {
@@ -41,11 +44,15 @@ struct PGCtl {
         print("""
         pgctl — control Screen Playground from the terminal (add --json to any command for agent-friendly output)
 
+        Demo scripts (the app clicks and types for you while recording; press Esc to stop):
+          pgctl run demo.json [--check] [--output out.mp4] [--folder DIR] [--open-editor]
+          pgctl help script                              the script format, with an example
+
         Recording (drives the Screen Playground app; it launches in the background if needed):
           pgctl status                                   app version and permissions
           pgctl targets                                  displays and windows you can record
           pgctl record start [--app Safari [--title T] | --window ID | --display N | --area x,y,w,h]
-                             [--mic [name]] [--system-audio] [--countdown 0] [--max-duration S] [--name N] [--folder DIR] [--open-editor]
+                             [--mic [name]] [--system-audio] [--countdown 0] [--max-duration S] [--name N] [--folder DIR] [--cut-idle 1.5] [--open-editor]
           pgctl record stop [--open-editor]              finish, auto-zoom, save; prints the project path
           pgctl record cancel | status
           pgctl mark caption "text" [--for S]            annotate the recording at this moment

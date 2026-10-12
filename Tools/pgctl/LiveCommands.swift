@@ -90,6 +90,7 @@ enum LiveCommands {
                 a["folder"] = .string(URL(fileURLWithPath: (v as NSString).expandingTildeInPath).standardizedFileURL.path)
             }
             if rest.contains("--open-editor") { a["openEditor"] = true }
+            if let v = PGCtl.option(rest, "--cut-idle").flatMap(Double.init) { a["cutIdle"] = .number(v) }
             let r = try ControlClient.send("record.start", .object(a))
             Output.emit(r) { "recording → \(r["project"]?.string ?? "")\nstop with: pgctl record stop" }
         case "stop":
@@ -123,6 +124,37 @@ enum LiveCommands {
         if let v = PGCtl.option(args, "--speed").flatMap(Double.init) { a["value"] = .number(v) }
         let r = try ControlClient.send("mark", .object(a))
         Output.emit(r) { "\(kind) at \(String(format: "%.2f", r["t"]?.number ?? 0))s" }
+    }
+
+    /// `pgctl run demo.json [--check] [--output file.mp4] [--open-editor] [--folder DIR]`
+    static func run(_ args: [String]) throws {
+        guard let path = args.first, !path.hasPrefix("--") else { PGCtl.usage() }
+        let data = path == "-" ? FileHandle.standardInput.readDataToEndOfFile()
+                               : try Data(contentsOf: URL(fileURLWithPath: (path as NSString).expandingTildeInPath))
+        let script = try DemoScript.decode(data)
+        if args.contains("--check") {
+            Output.emit(["ok": true, "steps": .number(Double(script.steps.count)), "app": .string(script.target.app)]) {
+                "script OK: \(script.steps.count) steps in \(script.target.app)"
+            }
+            return
+        }
+        var a: [String: JSONValue] = ["script": try JSONValue.from(script)]
+        if let v = PGCtl.option(args, "--output") {
+            a["output"] = .string(URL(fileURLWithPath: (v as NSString).expandingTildeInPath).standardizedFileURL.path)
+        }
+        if let v = PGCtl.option(args, "--folder") {
+            a["folder"] = .string(URL(fileURLWithPath: (v as NSString).expandingTildeInPath).standardizedFileURL.path)
+        }
+        if args.contains("--open-editor") { a["openEditor"] = true }
+        FileHandle.standardError.write(Data("running \(script.steps.count) steps in \(script.target.app) — press Esc to stop\n".utf8))
+        let r = try ControlClient.send("run", .object(a))
+        Output.emit(r) {
+            var lines = ["recorded \(r["project"]?.string ?? "")"]
+            if let out = r["output"]?.string { lines.append("exported \(out)") }
+            lines.append(String(format: "%.1fs · %d zooms · %d captions", r["duration"]?.number ?? 0, r["zooms"]?.int ?? 0, r["captions"]?.int ?? 0))
+            for w in r["warnings"]?.array ?? [] { lines.append("warning: \(w.string ?? "")") }
+            return lines.joined(separator: "\n")
+        }
     }
 
     private static func size(_ frame: JSONValue?) -> String {

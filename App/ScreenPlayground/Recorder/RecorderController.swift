@@ -73,6 +73,8 @@ final class RecorderController {
         var openEditor = false
         /// Where to save the project (defaults to the projects folder).
         var folder: URL?
+        /// Cut stretches with no input longer than this when finishing.
+        var cutIdle: Double?
     }
 
     init() {
@@ -275,7 +277,7 @@ final class RecorderController {
         }
         let bundle = try await session.stop()
         if !marks.isEmpty { try JSONLines.write(marks, to: bundle.marksFile) }
-        try ProjectFactory.finalize(bundle, config: PresetStore.configForNewRecordings)
+        try ProjectFactory.finalize(bundle, config: PresetStore.configForNewRecordings, cutIdle: automation?.cutIdle)
         AppModel.shared.reloadRecents()
         if openEditor { AppModel.shared.openProject(bundle.url) }
         return bundle

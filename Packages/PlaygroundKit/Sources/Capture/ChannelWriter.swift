@@ -38,6 +38,11 @@ public final class RecordingClock: @unchecked Sendable {
         }
     }
 
+    /// True for timestamps from before the recording started (capture begins a moment before the clock).
+    public func isBeforeStart(host: Double) -> Bool {
+        lock.withLock { origin.map { host < $0 } ?? true }
+    }
+
     /// Current source time (elapsed recording time excluding pauses).
     public var elapsed: Double {
         lock.withLock {
@@ -62,6 +67,9 @@ final class ChannelWriter: @unchecked Sendable {
     private(set) var pixelSize: CGSize = .zero
     private(set) var lastTime: Double = 0
     private(set) var failed = false
+    /// The newest video frame that arrived before the clock started. Screen frames only come on change,
+    /// so on a still screen this may be the only frame: it's written at time zero.
+    private var early: CMSampleBuffer?
 
     init(url: URL, kind: Kind, clock: RecordingClock) {
         self.url = url
@@ -73,7 +81,11 @@ final class ChannelWriter: @unchecked Sendable {
     func append(_ sample: CMSampleBuffer) {
         guard !failed, CMSampleBufferDataIsReady(sample) else { return }
         let hostPTS = CMSampleBufferGetPresentationTimeStamp(sample).seconds
-        guard let t = clock.sourceTime(host: hostPTS) else { return }
+        guard let t = clock.sourceTime(host: hostPTS) else {
+            if case .video = kind, clock.isBeforeStart(host: hostPTS) { early = sample }
+            return
+        }
+        writeEarlyFrame()
         if writer == nil { setUp(for: sample) }
         guard let writer, let input, writer.status == .writing else { return }
         guard input.isReadyForMoreMediaData else { return } // drop rather than block capture
@@ -83,6 +95,16 @@ final class ChannelWriter: @unchecked Sendable {
         } else if writer.status == .failed {
             failed = true
         }
+    }
+
+    /// Writes the pre-start frame at source time zero (once).
+    private func writeEarlyFrame() {
+        guard let sample = early else { return }
+        early = nil
+        if writer == nil { setUp(for: sample) }
+        guard let writer, let input, writer.status == .writing, input.isReadyForMoreMediaData else { return }
+        let hostPTS = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+        if let retimed = retime(sample, offset: hostPTS), input.append(retimed) { lastTime = max(lastTime, 0) }
     }
 
     private func setUp(for sample: CMSampleBuffer) {
@@ -141,6 +163,7 @@ final class ChannelWriter: @unchecked Sendable {
     /// Finishes the file. `endTime` (source seconds) extends the last sample to the real end of
     /// the recording, so an idle screen at the end isn't cut off (frames only arrive on change).
     func finish(endTime: Double? = nil) async {
+        writeEarlyFrame()
         guard let writer, let input, writer.status == .writing else { return }
         input.markAsFinished()
         if let endTime, endTime > lastTime {

@@ -90,9 +90,10 @@ enum ControlCommands {
         case "record.cancel": return try await recordCancel()
         case "record.status": return status()
         case "mark": return try mark(args)
+        case "run": return try await run(args)
         default:
             throw ControlError("unknown-command", "Unknown command '\(request.cmd)'.",
-                               fix: "Commands: ping, targets, record.start, record.stop, record.cancel, record.status, mark.")
+                               fix: "Commands: ping, targets, run, record.start, record.stop, record.cancel, record.status, mark.")
         }
     }
 
@@ -156,6 +157,7 @@ enum ControlCommands {
             options.folder = url
         }
         options.systemAudio = args["systemAudio"]?.bool ?? false
+        options.cutIdle = args["cutIdle"]?.number
         if let mic = args["mic"] {
             if mic.bool == true {
                 guard let first = CaptureCatalog.microphones().first else {
@@ -208,6 +210,17 @@ enum ControlCommands {
         }
         let t = try recorder.addMark(kind, text: args["text"]?.string, value: args["value"]?.number)
         return ["t": .number(t), "kind": .string(kind.rawValue)]
+    }
+
+    // MARK: Demo scripts
+
+    static func run(_ args: JSONValue) async throws -> JSONValue {
+        guard let raw = args["script"] else { throw ControlError("bad-request", "run needs a script.") }
+        let script = try DemoScript.decode(JSONEncoder().encode(raw))
+        let folder = args["folder"]?.string.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
+        if let folder { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+        return try await DemoRunner(script: script).run(outputOverride: args["output"]?.string, openEditor: args["openEditor"]?.bool,
+                                                        folder: folder)
     }
 
     // MARK: Helpers
