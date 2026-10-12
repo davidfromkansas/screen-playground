@@ -138,9 +138,15 @@ final class ChannelWriter: @unchecked Sendable {
 
     var hasData: Bool { writer != nil }
 
-    func finish() async {
+    /// Finishes the file. `endTime` (source seconds) extends the last sample to the real end of
+    /// the recording, so an idle screen at the end isn't cut off (frames only arrive on change).
+    func finish(endTime: Double? = nil) async {
         guard let writer, let input, writer.status == .writing else { return }
         input.markAsFinished()
+        if let endTime, endTime > lastTime {
+            writer.endSession(atSourceTime: CMTime(seconds: endTime, preferredTimescale: 600))
+            lastTime = endTime
+        }
         await writer.finishWriting()
     }
 

@@ -18,16 +18,7 @@ struct HomeView: View {
             mainContent
         }
         .frame(minWidth: 860, minHeight: 540)
-        .background {
-            ZStack {
-                Theme.background
-                Circle().fill(Color(red: 0.54, green: 0.49, blue: 1)).frame(width: 520).offset(x: -360, y: -260)
-                Circle().fill(Color(red: 0.5, green: 0.83, blue: 1)).frame(width: 420).offset(x: -160, y: -320)
-            }
-            .blur(radius: 110)
-            .opacity(0.45)
-            .ignoresSafeArea()
-        }
+        .background(Theme.stage.ignoresSafeArea())
         .preferredColorScheme(.light)
         .onAppear(perform: refresh)
         .onReceive(timer) { _ in refresh() }

@@ -25,7 +25,7 @@ struct EditorView: View {
     /// Glass chrome floats over a soft, blurred extension of the video's own background.
     var content: some View {
         ZStack {
-            StageBackdrop(background: model.doc.config.background)
+            StageBackdrop()
                 .ignoresSafeArea()
             VStack(spacing: 12) {
                 TopBar(model: model)
@@ -50,33 +50,9 @@ struct EditorView: View {
     }
 }
 
-/// Large blurred colour fields taken from the project's background, so the glass picks up its tint.
+/// The calm, solid backdrop behind the editor's glass.
 struct StageBackdrop: View {
-    var background: BackgroundConfig
-
-    var colors: [Color] {
-        func c(_ x: RGBAColor) -> Color { Color(red: x.r, green: x.g, blue: x.b) }
-        switch background.kind {
-        case .gradient: return background.gradient.stops.map { c($0.color) }
-        case .color: return [c(background.color), c(background.color)]
-        case .wallpaper, .image:
-            if let info = WallpaperCatalog.info(for: background.wallpaper), !info.palette.isEmpty { return info.palette.map(c) }
-            return [Color(red: 0.54, green: 0.49, blue: 1), Color(red: 1, green: 0.62, blue: 0.77), Color(red: 0.5, green: 0.83, blue: 1)]
-        }
-    }
-
-    var body: some View {
-        let cs = colors
-        ZStack {
-            Theme.stage
-            Circle().fill(cs[0]).frame(width: 620).offset(x: -260, y: -140)
-            Circle().fill(cs[min(1, cs.count - 1)]).frame(width: 560).offset(x: 220, y: 120)
-            if cs.count > 2 { Circle().fill(cs[2]).frame(width: 480).offset(x: 80, y: -220) }
-        }
-        .blur(radius: 120)
-        .opacity(0.5)
-        .animation(.easeInOut(duration: 0.4), value: background)
-    }
+    var body: some View { Theme.stage }
 }
 
 struct TopBar: View {

@@ -307,10 +307,10 @@ public final class RecordingSession: NSObject, @unchecked Sendable, SCStreamOutp
         await withCheckedContinuation { c in systemAudioQueue.async { c.resume() } }
         await withCheckedContinuation { c in micQueue.async { c.resume() } }
         await withCheckedContinuation { c in cameraQueue.async { c.resume() } }
-        await screenWriter.finish()
+        await screenWriter.finish(endTime: duration)
         await systemAudioWriter.finish()
         await micWriter.finish()
-        await cameraWriter.finish()
+        await cameraWriter.finish(endTime: duration)
         guard screenWriter.hasData else { throw streamError ?? RecordingError.noFrames }
 
         var channels = [ChannelInfo(kind: .display, file: "display.mov", pixelWidth: Int(screenWriter.pixelSize.width),
@@ -323,12 +323,22 @@ public final class RecordingSession: NSObject, @unchecked Sendable, SCStreamOutp
         }
         lock.withLock {
             manifest.status = .finished
-            manifest.duration = min(duration, max(screenWriter.lastTime, 0.1))
+            manifest.duration = max(duration, 0.1)
             manifest.channels = channels
             manifest.flags = flags
         }
         try bundle.saveManifest(lock.withLock { manifest })
         return bundle
+    }
+
+    /// Test hook: stops capture abruptly like a crash, leaving files unfinalized and the manifest
+    /// still marked `recording`.
+    public func simulateCrash() async {
+        try? await stream?.stopCapture()
+        geometryTimer?.cancel()
+        input?.stop()
+        await MainActor.run { cursor?.stop() }
+        await withCheckedContinuation { c in screenQueue.async { c.resume() } }
     }
 
     /// Stops and deletes everything.

@@ -78,6 +78,9 @@ public enum FixtureFactory {
         public var clickTimes: [Double] = [1.5, 2.2, 4.0]
         /// Time ranges with no video frames, like an idle screen in a real (variable frame rate) recording.
         public var idleGaps: [ClosedRange<Double>] = []
+        /// Adds a microphone channel (a 440 Hz tone) and/or a camera channel (640×480, moving dot).
+        public var withMicrophone = false
+        public var withCamera = false
         public init() {}
     }
 
@@ -118,6 +121,14 @@ public enum FixtureFactory {
         manifest.pixelScale = 2
         manifest.duration = options.duration
         manifest.channels = [ChannelInfo(kind: .display, file: "display.mp4", pixelWidth: options.width, pixelHeight: options.height)]
+        if options.withMicrophone {
+            try await writeTone(to: bundle.recordingFolder.appendingPathComponent("microphone.m4a"), seconds: options.duration)
+            manifest.channels.append(ChannelInfo(kind: .microphone, file: "microphone.m4a"))
+        }
+        if options.withCamera {
+            try await writeCamera(to: bundle.recordingFolder.appendingPathComponent("camera.mp4"), seconds: options.duration)
+            manifest.channels.append(ChannelInfo(kind: .camera, file: "camera.mp4", pixelWidth: 640, pixelHeight: 480))
+        }
         try bundle.saveManifest(manifest)
 
         var doc = ProjectDocument()
@@ -127,7 +138,44 @@ public enum FixtureFactory {
         return bundle
     }
 
+    /// 440 Hz tone at -12 dBFS, AAC in an M4A.
+    static func writeTone(to url: URL, seconds: Double) async throws {
+        try? FileManager.default.removeItem(at: url)
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+        let file = try AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48000,
+                                                               AVNumberOfChannelsKey: 2, AVEncoderBitRateKey: 128_000])
+        let frames = AVAudioFrameCount(seconds * 48000)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+        buffer.frameLength = frames
+        for ch in 0..<2 { for i in 0..<Int(frames) { buffer.floatChannelData![ch][i] = 0.25 * sin(Float(i) * 2 * .pi * 440 / 48000) } }
+        try file.write(from: buffer)
+    }
+
+    /// A webcam stand-in: soft background with a dot that moves, 30 fps.
+    static func writeCamera(to url: URL, seconds: Double) async throws {
+        var o = Options()
+        o.duration = seconds
+        o.fps = 30
+        o.width = 640
+        o.height = 480
+        try await writeVideo(to: url, options: o, frame: { i in
+            guard let ctx = CGContext(data: nil, width: 640, height: 480, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) else { return nil }
+            ctx.setFillColor(CGColor(red: 0.85, green: 0.78, blue: 0.7, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: 640, height: 480))
+            let x = 320 + 150 * sin(Double(i) / 15)
+            ctx.setFillColor(CGColor(red: 0.3, green: 0.25, blue: 0.2, alpha: 1))
+            ctx.fillEllipse(in: CGRect(x: x - 60, y: 160, width: 120, height: 160))
+            return ctx.makeImage()
+        })
+    }
+
     static func writeVideo(to url: URL, options: Options) async throws {
+        try await writeVideo(to: url, options: options, frame: { i in screenImage(width: options.width, height: options.height, frameIndex: i) })
+    }
+
+    static func writeVideo(to url: URL, options: Options, frame makeFrame: (Int) -> CGImage?) async throws {
         try? FileManager.default.removeItem(at: url)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
@@ -153,7 +201,7 @@ public enum FixtureFactory {
             guard let pool = adaptor.pixelBufferPool else { break }
             var pb: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb)
-            guard let pb, let img = screenImage(width: options.width, height: options.height, frameIndex: i) else { continue }
+            guard let pb, let img = makeFrame(i) else { continue }
             CVPixelBufferLockBaseAddress(pb, [])
             if let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pb), width: options.width, height: options.height, bitsPerComponent: 8,
                                    bytesPerRow: CVPixelBufferGetBytesPerRow(pb), space: CGColorSpace(name: CGColorSpace.sRGB)!,

@@ -8,7 +8,8 @@ enum Theme {
     static let accentSoft = Color(red: 0.275, green: 0.275, blue: 0.902)    // #4646E6 — accent text / selection on light
     static let record = Color(red: 0.898, green: 0.208, blue: 0.176)        // #E5352D
     static let background = Color(red: 0.957, green: 0.961, blue: 0.973)    // #F4F5F8 ground
-    static let stage = Color(red: 0.933, green: 0.941, blue: 0.961)         // #EEF0F5 behind the preview
+    /// Solid, calm backdrop behind all glass: a touch darker than the frosted panels so they read clearly.
+    static let stage = Color(red: 0.914, green: 0.925, blue: 0.945)         // #E9ECF1
     static let panel = Color.white                                           // solid surface
     static let control = Color(red: 0.12, green: 0.12, blue: 0.24).opacity(0.06)
     static let controlHover = Color(red: 0.12, green: 0.12, blue: 0.24).opacity(0.10)
