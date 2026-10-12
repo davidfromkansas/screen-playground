@@ -214,25 +214,48 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 600)
+        .frame(width: 580, height: 680)
     }
 }
 
-/// Installs the bundled `pgctl` on PATH by running its own `install` command (one source of truth).
+/// Connects agent apps by running the bundled `pgctl install` (one source of truth for the setup logic).
 struct AgentSetupRow: View {
     @State private var message: String?
     @State private var failed = false
 
+    struct Target: Identifiable {
+        var id: String
+        var title: String
+        var detail: String
+        var changes: String
+    }
+
+    static let targets = [
+        Target(id: "claude-code", title: "Claude Code", detail: "Adds the demo-making skill; Claude Code runs pgctl from its terminal.",
+               changes: "This adds a skill to ~/.claude/skills and links pgctl into ~/.local/bin."),
+        Target(id: "claude-desktop", title: "Claude app", detail: "Adds Screen Playground as a tool in the Claude app's chats (MCP).",
+               changes: "This adds a “screen-playground” entry to the Claude app's claude_desktop_config.json (a backup is kept)."),
+        Target(id: "codex", title: "Codex", detail: "Adds Screen Playground as an MCP server for the Codex CLI and IDE extension.",
+               changes: "This adds an [mcp_servers.screen-playground] entry to ~/.codex/config.toml (a backup is kept)."),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Let AI agents like Claude Code and Codex record and edit demos with the pgctl command-line tool.")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Let AI agents record and edit demo videos for you. Agents click and type through a script while Screen Playground records; press Esc to stop them.")
                 .foregroundStyle(.secondary)
-            HStack {
-                Button("Install Command-Line Tool") { install() }
-                Button("Copy Help Command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString("pgctl help", forType: .string)
+            ForEach(Self.targets) { t in
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(t.title).font(.system(size: 13, weight: .semibold))
+                        Text(t.detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Set Up…") { confirm(t) }
                 }
+            }
+            HStack {
+                Button("Install Command-Line Tool Only") { run(["install", "--force"]) }
+                Spacer()
             }
             if let message {
                 Text(message)
@@ -243,11 +266,20 @@ struct AgentSetupRow: View {
         }
     }
 
-    private func install() {
-        let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/pgctl")
+    private func confirm(_ t: Target) {
+        let alert = NSAlert()
+        alert.messageText = "Set up \(t.title)?"
+        alert.informativeText = t.changes
+        alert.addButton(withTitle: "Set Up")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        run(["install", "--force", "--for", t.id])
+    }
+
+    private func run(_ arguments: [String]) {
         let process = Process()
-        process.executableURL = tool
-        process.arguments = ["install", "--force"]
+        process.executableURL = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/pgctl")
+        process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe

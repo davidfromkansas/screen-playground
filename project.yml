@@ -31,6 +31,9 @@ targets:
     platform: macOS
     sources:
       - path: App/ScreenPlayground
+      # The agent skill ships in the app so `pgctl install --for claude-code` works from any install.
+      - path: skills/screen-playground-demo/SKILL.md
+        buildPhase: resources
     dependencies:
       - package: PlaygroundKit
         product: PlaygroundCore

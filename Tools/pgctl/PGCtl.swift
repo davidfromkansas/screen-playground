@@ -24,6 +24,7 @@ struct PGCtl {
             case "mark": try LiveCommands.mark(args)
             case "run": try LiveCommands.run(args)
             case "install": try Installer.run(args)
+            case "mcp": MCPServer.serve()
             case "edit": try await EditCommands.edit(args)
             case "frames": try await EditCommands.frames(args)
             case "make-fixture": try await makeFixture(args)
@@ -59,7 +60,9 @@ struct PGCtl {
           pgctl mark zoom [level] | cut-start | cut-end | speed-start [x] | speed-end | hold [S] | note "text"
 
         Setup:
-          pgctl install [--force]                        link pgctl into ~/.local/bin
+          pgctl install [--force] [--for claude-code|claude-desktop|codex]
+                                                         link pgctl into ~/.local/bin and connect an agent app
+          pgctl mcp                                      run as an MCP server (stdio) for agent apps
 
         Projects (no app needed):
           pgctl info <project>

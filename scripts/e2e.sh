@@ -76,6 +76,22 @@ run "E13 agent edits (captions, zoom, cut, frames)" e13
 ejson() { ! "$PGCTL" --json edit "$FIX" --caption 'oops' > "$OUT/err.json" && jq -e '.error.code == "bad-request"' "$OUT/err.json"; }
 run "JSON error output" ejson
 
+# Agent setup — install into a fake home: keeps existing config, backs it up, idempotent; MCP handshake + tools.
+einstall() {
+  local H="$OUT/home"; rm -rf "$H"; mkdir -p "$H/Library/Application Support/Claude" "$H/.codex"
+  echo '{"mcpServers":{"other":{"command":"x"}}}' > "$H/Library/Application Support/Claude/claude_desktop_config.json"
+  printf '[mcp_servers.other]\ncommand = "y"\n' > "$H/.codex/config.toml"
+  PG_HOME="$H" PG_SKILL_PATH="$(dirname "$0")/../skills/screen-playground-demo/SKILL.md" \
+    "$PGCTL" --json install --for claude-code --for claude-desktop --for codex >/dev/null &&
+  PG_HOME="$H" PG_SKILL_PATH="$(dirname "$0")/../skills/screen-playground-demo/SKILL.md" "$PGCTL" --json install --for codex >/dev/null &&
+  jq -e '.mcpServers.other and .mcpServers["screen-playground"].args == ["mcp"]' "$H/Library/Application Support/Claude/claude_desktop_config.json" &&
+  [[ $(grep -c 'mcp_servers.screen-playground' "$H/.codex/config.toml") -eq 1 ]] && grep -q 'mcp_servers.other' "$H/.codex/config.toml" &&
+  [[ -s "$H/.claude/skills/screen-playground-demo/SKILL.md" ]] &&
+  printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+                 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$PGCTL" mcp | tail -1 | jq -e '(.result.tools | length) >= 10'
+}
+run "agent setup + MCP server" einstall
+
 # Frame render sanity.
 fr() { "$PGCTL" render-frame "$FIX" 2.0 "$OUT/frame.png" --auto-zoom && [[ -s "$OUT/frame.png" ]]; }
 run "render frame" fr
