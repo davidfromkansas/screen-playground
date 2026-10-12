@@ -67,6 +67,7 @@ final class EditorModel {
     private var audioPlayer: AVPlayer?
     private var audioDirty = true
     private var audioStarted = false
+    private var lastCoalescedEdit: Double = 0
     private var audioTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var snapshotTask: Task<Void, Never>?
@@ -109,7 +110,11 @@ final class EditorModel {
         guard d != history.current else { return }
         let slicesChanged = d.scene.slices != history.current.scene.slices || d.config.audio != history.current.config.audio
         let editedZoom = zoomBeingEdited(old: history.current, new: d)
-        history.commit(d, name: name, coalesce: coalesce)
+        // Merge into the previous step only during one continuous drag (rapid successive changes).
+        let now = HostClock.now()
+        let continuous = coalesce && now - lastCoalescedEdit < 0.6
+        lastCoalescedEdit = coalesce ? now : 0
+        history.commit(d, name: name, coalesce: continuous)
         if let editedZoom { showZoom(editedZoom) }
         if slicesChanged {
             audioDirty = true

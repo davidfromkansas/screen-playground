@@ -226,3 +226,21 @@ import Timeline
         #expect(try await track.load(.naturalSize) == CGSize(width: 1080, height: 1080))
     }
 }
+
+@MainActor
+@Suite struct UndoGranularityTests {
+    /// Two separate changes to the same slider are two undo steps; one continuous drag is one.
+    @Test func separateSliderChangesUndoSeparately() async throws {
+        let model = try await PersonaFlowTests.openFixture(duration: 4, clicks: [])
+        let padding = model.binding(\.config.frame.padding, "Padding")
+        let original = model.doc.config.frame.padding
+        for v in stride(from: 0.10, through: 0.14, by: 0.01) { padding.wrappedValue = v } // one drag
+        #expect(abs(model.doc.config.frame.padding - 0.14) < 1e-9)
+        try await Task.sleep(nanoseconds: 700_000_000)
+        padding.wrappedValue = 0.2                                                       // a later, separate change
+        model.undo()
+        #expect(abs(model.doc.config.frame.padding - 0.14) < 1e-9)
+        model.undo()
+        #expect(abs(model.doc.config.frame.padding - original) < 1e-9)
+    }
+}

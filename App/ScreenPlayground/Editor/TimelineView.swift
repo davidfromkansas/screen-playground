@@ -31,9 +31,13 @@ struct TimelineView: View {
                         .gesture(DragGesture(minimumDistance: 0).onChanged { v in model.seek((v.location.x - Self.inset) / pps) })
                     trackBackground(y: Self.clipY, h: Self.clipH, width: contentW)
                     trackBackground(y: Self.zoomY, h: Self.zoomH, width: contentW)
-                        .onTapGesture { p in model.addZoom(at: (p.x - Self.inset) / pps) }
+                        .gesture(SpatialTapGesture(coordinateSpace: .named("timeline")).onEnded { v in
+                            model.addZoom(at: (v.location.x - Self.inset) / pps)
+                        })
                     trackBackground(y: Self.maskY, h: Self.maskH, width: contentW)
-                        .onTapGesture { p in model.addMask(at: (p.x - Self.inset) / pps) }
+                        .gesture(SpatialTapGesture(coordinateSpace: .named("timeline")).onEnded { v in
+                            model.addMask(at: (v.location.x - Self.inset) / pps)
+                        })
                     if model.doc.scene.zooms.isEmpty {
                         hint("Click to add a zoom", y: Self.zoomY, h: Self.zoomH)
                     }
