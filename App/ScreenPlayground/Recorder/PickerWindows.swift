@@ -48,7 +48,7 @@ final class PickerWindows {
         let size = NSSize(width: 640, height: 64)
         let frame = NSRect(x: main.frame.midX - size.width / 2, y: main.frame.minY + 110, width: size.width, height: size.height)
         let bar = OverlayPanel(frame: frame, level: .screenSaver)
-        bar.contentView = NSHostingView(rootView: PickerToolbar(controller: controller).preferredColorScheme(.dark))
+        bar.contentView = NSHostingView(rootView: PickerToolbar(controller: controller).preferredColorScheme(.light))
         bar.hasShadow = true
         bar.isMovableByWindowBackground = true
         bar.makeKeyAndOrderFront(nil)
@@ -84,8 +84,9 @@ struct PickerToolbar: View {
                         Text(m.title).font(.system(size: 10, weight: .medium))
                     }
                     .frame(width: 62, height: 44)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(controller.mode == m ? Theme.accent.opacity(0.28) : .clear))
-                    .foregroundStyle(controller.mode == m ? Theme.accentSoft : .primary)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(controller.mode == m ? Color.white : .clear)
+                        .shadow(color: .black.opacity(controller.mode == m ? 0.12 : 0), radius: 3, y: 1))
+                    .foregroundStyle(controller.mode == m ? Theme.accentSoft : Theme.text)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -117,15 +118,15 @@ struct PickerToolbar: View {
                     Text("Record")
                 }
             }
-            .buttonStyle(PrimaryButtonStyle())
+            .recordGlassButton()
             .disabled(!controller.canStart)
             .opacity(controller.canStart ? 1 : 0.5)
             .keyboardShortcut(.return, modifiers: [])
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panel.opacity(0.97)))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.stroke))
+        .glass()
+        .padding(4)
     }
 
     func deviceMenu(icon: String, none: String, devices: [AVDeviceInfo], selection: Binding<String?>) -> some View {
@@ -212,7 +213,7 @@ struct SelectionOverlay: View {
             VStack(spacing: 8) {
                 Text(target.appName).font(.system(size: 13, weight: .semibold))
                     .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(Capsule().fill(Theme.panel))
+                    .glass()
                 if controller.selectedWindow != nil { recordButton }
             }
             .position(x: rect.midX, y: min(rect.maxY - 40, rect.midY))
@@ -250,14 +251,14 @@ struct SelectionOverlay: View {
             HStack(spacing: 8) {
                 Text("\(Int(rect.width)) × \(Int(rect.height))").font(.system(size: 12).monospacedDigit())
                     .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Capsule().fill(Theme.panel))
+                    .glass()
                 if controller.canStart { recordButton }
             }
             .position(x: rect.midX, y: min(rect.maxY + 34, size.height - 30))
         } else {
             Text("Drag to select an area").font(.system(size: 15, weight: .medium))
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(Theme.panel))
+                .glass()
                 .position(x: size.width / 2, y: size.height / 2)
                 .allowsHitTesting(false)
         }
@@ -270,7 +271,6 @@ struct SelectionOverlay: View {
                 Text("Start recording")
             }
         }
-        .buttonStyle(PrimaryButtonStyle())
-        .shadow(radius: 10)
+        .recordGlassButton()
     }
 }

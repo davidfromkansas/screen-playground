@@ -13,7 +13,7 @@ final class ControlWidgetWindow {
                              level: .floating)
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
-        panel.contentView = NSHostingView(rootView: ControlWidget(controller: controller).preferredColorScheme(.dark))
+        panel.contentView = NSHostingView(rootView: ControlWidget(controller: controller).preferredColorScheme(.light))
     }
 
     func show() { panel.orderFrontRegardless() }
@@ -26,14 +26,14 @@ struct ControlWidget: View {
     var body: some View {
         HStack(spacing: 4) {
             Button { controller.stop() } label: {
-                RoundedRectangle(cornerRadius: 3).fill(.red).frame(width: 12, height: 12)
+                RoundedRectangle(cornerRadius: 4).fill(Theme.record).frame(width: 13, height: 13)
             }
             .buttonStyle(IconButtonStyle())
             .help("Finish recording (⌥⌘↩)")
             Text(timeString(controller.elapsed))
                 .font(.system(size: 14, weight: .semibold).monospacedDigit())
                 .frame(width: 64, alignment: .leading)
-                .foregroundStyle(controller.isPaused ? Theme.secondaryText : .primary)
+                .foregroundStyle(controller.isPaused ? Theme.secondaryText : Theme.text)
             MicMeter(level: controller.micLevel).frame(width: 34, height: 14)
             Spacer()
             Button { controller.togglePause() } label: { Image(systemName: controller.isPaused ? "play.fill" : "pause.fill") }
@@ -48,8 +48,8 @@ struct ControlWidget: View {
         }
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel.opacity(0.97)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke))
+        .glass()
+        .padding(3)
     }
 
     func timeString(_ t: Double) -> String {
@@ -66,7 +66,7 @@ struct MicMeter: View {
                 ForEach(0..<6, id: \.self) { i in
                     let on = Float(i) / 6 < level
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(on ? Color.green : Color.white.opacity(0.15))
+                        .fill(on ? Theme.success : Theme.text.opacity(0.15))
                         .frame(height: g.size.height * (0.4 + 0.6 * CGFloat(i) / 5))
                 }
             }
@@ -104,9 +104,9 @@ struct CountdownView: View {
     var body: some View {
         Text("\(model.number)")
             .font(.system(size: 110, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.text)
             .frame(width: 200, height: 200)
-            .background(Circle().fill(.black.opacity(0.55)))
+            .glass(cornerRadius: 100)
             .contentTransition(.numericText(countsDown: true))
             .animation(.snappy, value: model.number)
     }

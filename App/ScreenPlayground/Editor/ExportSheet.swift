@@ -19,7 +19,7 @@ struct ExportSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Export").font(.system(size: 17, weight: .semibold))
+                Text("Export").font(.system(size: 20, weight: .bold))
                 Spacer()
                 if let size = model.snapshot?.canvasSize(shortSide: settings.resolution.rawValue) {
                     Text("\(size.width) × \(size.height) · \(durationLabel(model.duration))")
@@ -42,9 +42,9 @@ struct ExportSheet: View {
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(.red) }
         }
-        .padding(22)
-        .frame(width: 460)
-        .background(Theme.panel)
+        .padding(24)
+        .frame(width: 480)
+        .preferredColorScheme(.light)
     }
 
     @ViewBuilder var form: some View {
@@ -75,8 +75,9 @@ struct ExportSheet: View {
             Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
             Spacer()
             Button { run(toClipboard: true) } label: { Label("Copy to Clipboard", systemImage: "doc.on.clipboard") }
+                .glassButton()
             Button { run(toClipboard: false) } label: { Label("Export to File", systemImage: "square.and.arrow.down") }
-                .buttonStyle(PrimaryButtonStyle())
+                .primaryGlassButton()
                 .keyboardShortcut(.defaultAction)
         }
         .padding(.top, 6)
@@ -103,7 +104,7 @@ struct ExportSheet: View {
                 Button("Open") { NSWorkspace.shared.open(url) }
                 ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
                 Spacer()
-                Button("Done") { dismiss() }.buttonStyle(PrimaryButtonStyle()).keyboardShortcut(.defaultAction)
+                Button("Done") { dismiss() }.primaryGlassButton().keyboardShortcut(.defaultAction)
             }
         }
     }

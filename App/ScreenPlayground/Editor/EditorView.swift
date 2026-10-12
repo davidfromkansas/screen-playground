@@ -17,36 +17,65 @@ struct EditorView: View {
                 content
             }
         }
-        .background(Theme.background)
-        .preferredColorScheme(.dark)
+        .background(Theme.stage)
+        .preferredColorScheme(.light)
         .sheet(isPresented: $model.exportPresented) { ExportSheet(model: model) }
     }
 
+    /// Glass chrome floats over a soft, blurred extension of the video's own background.
     var content: some View {
-        VStack(spacing: 0) {
-            TopBar(model: model)
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    PreviewToolbar(model: model)
-                    HStack(spacing: 0) {
-                        LeftToolbar(model: model)
+        ZStack {
+            StageBackdrop(background: model.doc.config.background)
+                .ignoresSafeArea()
+            VStack(spacing: 12) {
+                TopBar(model: model)
+                HStack(spacing: 14) {
+                    LeftToolbar(model: model)
+                    VStack(spacing: 10) {
                         PreviewView(model: model)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                        TransportBar(model: model)
                     }
-                    TransportBar(model: model)
+                    SidebarPanel(model: model)
+                        .frame(width: 320)
                 }
-                PanelRail(model: model)
-                SidebarView(model: model)
-                    .frame(width: 300)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
-                    .padding(.trailing, 10)
-                    .padding(.vertical, 8)
+                TimelineView(model: model)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 6)
+                    .glass(cornerRadius: Theme.panelRadius)
             }
-            TimelineView(model: model)
-                .padding(.bottom, 10)
-                .background(Theme.background)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
+            .padding(.top, 6)
         }
+    }
+}
+
+/// Large blurred colour fields taken from the project's background, so the glass picks up its tint.
+struct StageBackdrop: View {
+    var background: BackgroundConfig
+
+    var colors: [Color] {
+        func c(_ x: RGBAColor) -> Color { Color(red: x.r, green: x.g, blue: x.b) }
+        switch background.kind {
+        case .gradient: return background.gradient.stops.map { c($0.color) }
+        case .color: return [c(background.color), c(background.color)]
+        case .wallpaper, .image:
+            if let info = WallpaperCatalog.info(for: background.wallpaper), !info.palette.isEmpty { return info.palette.map(c) }
+            return [Color(red: 0.54, green: 0.49, blue: 1), Color(red: 1, green: 0.62, blue: 0.77), Color(red: 0.5, green: 0.83, blue: 1)]
+        }
+    }
+
+    var body: some View {
+        let cs = colors
+        ZStack {
+            Theme.stage
+            Circle().fill(cs[0]).frame(width: 620).offset(x: -260, y: -140)
+            Circle().fill(cs[min(1, cs.count - 1)]).frame(width: 560).offset(x: 220, y: 120)
+            if cs.count > 2 { Circle().fill(cs[2]).frame(width: 480).offset(x: 80, y: -220) }
+        }
+        .blur(radius: 120)
+        .opacity(0.5)
+        .animation(.easeInOut(duration: 0.4), value: background)
     }
 }
 
@@ -56,33 +85,54 @@ struct TopBar: View {
     @FocusState private var editingName: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            Spacer().frame(width: 70) // traffic lights
-            Button { AppModel.shared.showHome() } label: { Image(systemName: "folder") }.buttonStyle(IconButtonStyle()).help("Projects")
-            Button { NSWorkspace.shared.activateFileViewerSelecting([model.url]) } label: { Image(systemName: "magnifyingglass") }
-                .buttonStyle(IconButtonStyle()).help("Show project in Finder")
+        HStack(spacing: 10) {
+            Spacer().frame(width: 66) // traffic lights
+            HStack(spacing: 2) {
+                Button { AppModel.shared.showHome() } label: { Image(systemName: "folder") }.buttonStyle(IconButtonStyle()).help("Projects")
+                Button { NSWorkspace.shared.activateFileViewerSelecting([model.url]) } label: { Image(systemName: "magnifyingglass") }
+                    .buttonStyle(IconButtonStyle()).help("Show project in Finder")
+            }
+            .padding(3)
+            .frame(height: 40)
+            .glass()
+            PreviewToolbar(model: model)
             Spacer()
-            TextField("Name", text: $name)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, weight: .semibold))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
-                .focused($editingName)
-                .onSubmit { model.rename(name); editingName = false }
-                .onAppear { name = model.doc.name }
-                .onChange(of: model.doc.name) { _, n in if !editingName { name = n } }
-            Spacer()
-            Button { model.undo() } label: { Image(systemName: "arrow.uturn.backward") }
-                .buttonStyle(IconButtonStyle()).disabled(!model.canUndo).help("Undo (⌘Z)")
-            Button { model.redo() } label: { Image(systemName: "arrow.uturn.forward") }
-                .buttonStyle(IconButtonStyle()).disabled(!model.canRedo).help("Redo (⇧⌘Z)")
+            HStack(spacing: 2) {
+                Button { model.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                    .buttonStyle(IconButtonStyle()).disabled(!model.canUndo).help("Undo (⌘Z)")
+                Button { model.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                    .buttonStyle(IconButtonStyle()).disabled(!model.canRedo).help("Redo (⇧⌘Z)")
+            }
+            .padding(3)
+            .frame(height: 40)
+            .glass()
             PresetsMenu(model: model)
-            Button { model.exportPresented = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
-                .buttonStyle(PrimaryButtonStyle())
+                .padding(.horizontal, 6)
+                .frame(height: 40)
+                .glass()
+            Button { model.exportPresented = true } label: { Label("Export", systemImage: "square.and.arrow.up").padding(.horizontal, 4) }
+                .primaryGlassButton()
                 .keyboardShortcut("e", modifiers: .command)
         }
-        .padding(.horizontal, 12)
+        .glassGroup()
         .frame(height: 46)
+        .overlay { titleField } // always centred in the window, whatever sits left or right
+    }
+
+    var titleField: some View {
+        TextField("Name", text: $name)
+            .textFieldStyle(.plain)
+            .font(.system(size: 13, weight: .semibold))
+            .multilineTextAlignment(.center)
+            .frame(width: 280)
+            .frame(height: 22)
+            .padding(.vertical, 9)
+            .padding(.horizontal, 12)
+            .glass()
+            .focused($editingName)
+            .onSubmit { model.rename(name); editingName = false }
+            .onAppear { name = model.doc.name }
+            .onChange(of: model.doc.name) { _, n in if !editingName { name = n } }
     }
 }
 
@@ -90,7 +140,7 @@ struct PreviewToolbar: View {
     @Bindable var model: EditorModel
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Menu {
                 Picker("Aspect ratio", selection: model.binding(\.config.output.aspect, "Aspect ratio")) {
                     ForEach(AspectRatio.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -98,6 +148,8 @@ struct PreviewToolbar: View {
                 .pickerStyle(.inline)
             } label: { Label(model.doc.config.output.aspect == .auto ? "Auto" : model.doc.config.output.aspect.rawValue, systemImage: "aspectratio") }
                 .menuStyle(.borderlessButton).fixedSize()
+                .padding(.horizontal, 14).frame(height: 40)
+                .glass()
             Menu {
                 Button("Remove browser toolbar (top 8%)") { model.update("Crop") { $0.config.output.crop = NormRect(x: 0, y: 0.08, width: 1, height: 0.92) } }
                 Button("Crop to center 16:9") { model.update("Crop") { $0.config.output.crop = Self.centerCrop(model: model, aspect: 16.0 / 9) } }
@@ -106,11 +158,10 @@ struct PreviewToolbar: View {
                 Button("Reset crop") { model.update("Crop") { $0.config.output.crop = .full } }
             } label: { Label("Crop", systemImage: "crop") }
                 .menuStyle(.borderlessButton).fixedSize()
-            Spacer()
+                .padding(.horizontal, 14).frame(height: 40)
+                .glass()
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 64)
-        .frame(height: 30)
+        .font(.system(size: 13, weight: .medium))
     }
 
     static func centerCrop(model: EditorModel, aspect: Double) -> NormRect {
@@ -138,19 +189,18 @@ struct LeftToolbar: View {
                     model.update("Loupe") { d in if let i = d.scene.zooms.firstIndex(where: { $0.id == id }) { d.scene.zooms[i].style = .loupe } }
                 }
             } label: { Image(systemName: "circle.circle") }.buttonStyle(IconButtonStyle()).help("Add Glass Loupe at playhead")
-            Divider().frame(width: 24)
+            Divider().frame(width: 22)
             Button { model.addMask(kind: .blur) } label: { Image(systemName: "eye.slash") }.buttonStyle(IconButtonStyle()).help("Blur sensitive area")
             Button { model.addMask(kind: .highlight) } label: { Image(systemName: "rectangle.inset.filled") }.buttonStyle(IconButtonStyle()).help("Add highlight")
             if model.hasCamera {
-                Divider().frame(width: 24)
+                Divider().frame(width: 22)
                 ForEach([CameraLayoutKind.overlay, .split, .cameraOnly, .screenOnly], id: \.self) { kind in
                     Button { addLayout(kind) } label: { Image(systemName: icon(kind)) }.buttonStyle(IconButtonStyle()).help("Switch layout here")
                 }
             }
         }
-        .padding(6)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
-        .padding(.leading, 10)
+        .padding(5)
+        .glass(cornerRadius: 24)
     }
 
     func icon(_ k: CameraLayoutKind) -> String {
@@ -175,27 +225,36 @@ struct LeftToolbar: View {
     }
 }
 
+/// Floating playback capsule under the preview.
 struct TransportBar: View {
     @Bindable var model: EditorModel
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 6) {
             Button { model.splitAtPlayhead() } label: { Image(systemName: "scissors") }.buttonStyle(IconButtonStyle()).help("Split at playhead (C)")
-            Spacer()
-            Text(timecode(model.time)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondaryText).frame(width: 70, alignment: .trailing)
+            Text(timecode(model.time)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondaryText).frame(width: 64, alignment: .trailing)
             Button { model.seek(0) } label: { Image(systemName: "backward.end.fill") }.buttonStyle(IconButtonStyle())
-            Button { model.togglePlay() } label: { Image(systemName: model.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 18)) }
-                .buttonStyle(IconButtonStyle()).help("Play/Pause (Space)")
+            Button { model.togglePlay() } label: {
+                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Theme.text))
+                    .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+            }
+            .buttonStyle(.plain)
+            .help("Play/Pause (Space)")
             Button { model.seek(model.duration) } label: { Image(systemName: "forward.end.fill") }.buttonStyle(IconButtonStyle())
-            Text(timecode(model.duration)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondaryText).frame(width: 70, alignment: .leading)
-            Spacer()
+            Text(timecode(model.duration)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondaryText).frame(width: 64, alignment: .leading)
             Button { model.loopPlayback.toggle() } label: { Image(systemName: "repeat") }
                 .buttonStyle(IconButtonStyle(active: model.loopPlayback)).help("Loop playback")
-            Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondaryText)
-            Slider(value: $model.timelineZoom, in: 1...20).frame(width: 110).controlSize(.mini).tint(Theme.accent)
+            Image(systemName: "minus.magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.secondaryText).padding(.leading, 4)
+            Slider(value: $model.timelineZoom, in: 1...20).frame(width: 90).controlSize(.mini).tint(Theme.accent)
+                .help("Timeline zoom")
         }
-        .padding(.horizontal, 16)
-        .frame(height: 38)
+        .padding(.horizontal, 8)
+        .frame(height: 50)
+        .glass()
     }
 }
 
@@ -217,7 +276,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.title = url.deletingPathExtension().lastPathComponent
         window.representedURL = url
         window.minSize = NSSize(width: 1000, height: 680)
-        window.backgroundColor = NSColor(Theme.background)
+        window.backgroundColor = NSColor(Theme.stage)
+        window.appearance = NSAppearance(named: .aqua)
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self

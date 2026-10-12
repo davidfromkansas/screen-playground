@@ -42,6 +42,8 @@ private struct PreviewSurface: NSViewRepresentable {
 final class PreviewNSView: NSView {
     let renderer = PreviewRenderer()
     private let metalLayer = CAMetalLayer()
+    /// Soft drop shadow under the video frame (the Metal layer itself must clip its corners).
+    private let shadowLayer = CALayer()
     private var lastSnapshot: RenderSnapshot?
     private var lastTime: Double = 0
     private var lastPlaying = false
@@ -54,8 +56,14 @@ final class PreviewNSView: NSView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = false
         metalLayer.isOpaque = true
-        metalLayer.cornerRadius = 6
+        metalLayer.cornerRadius = 12
+        metalLayer.cornerCurve = .continuous
         metalLayer.masksToBounds = true
+        shadowLayer.shadowColor = NSColor(red: 0.12, green: 0.12, blue: 0.24, alpha: 1).cgColor
+        shadowLayer.shadowOpacity = 0.22
+        shadowLayer.shadowRadius = 24
+        shadowLayer.shadowOffset = CGSize(width: 0, height: -12)
+        layer?.insertSublayer(shadowLayer, at: 0) // beneath the video
         metalLayer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         layer?.addSublayer(metalLayer)
     }
@@ -88,6 +96,8 @@ final class PreviewNSView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         metalLayer.frame = frame
+        shadowLayer.frame = frame
+        shadowLayer.shadowPath = CGPath(roundedRect: CGRect(origin: .zero, size: frame.size), cornerWidth: 12, cornerHeight: 12, transform: nil)
         CATransaction.commit()
         // Cap preview resolution to keep playback smooth.
         let shortSide = min(Int(min(w, h) * scale), 1440)

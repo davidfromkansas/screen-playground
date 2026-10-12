@@ -10,7 +10,7 @@ struct ScreenPlaygroundApp: App {
 
     var body: some SwiftUI.Scene {
         Settings {
-            SettingsView().environment(AppModel.shared).preferredColorScheme(.dark)
+            SettingsView().environment(AppModel.shared).preferredColorScheme(.light)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -40,11 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Self.isHostingTests { return }
         MainActor.assumeIsolated {
-            NSApp.appearance = NSAppearance(named: .darkAqua)
+            NSApp.appearance = NSAppearance(named: .aqua)
             statusItem = StatusItemController()
             HotKeys.shared.register()
             AppModel.shared.recoverUnfinishedRecordings()
             if !ProcessInfo.processInfo.arguments.contains("-PGNoHome") { AppModel.shared.showHome() }
+            ComponentGallery.showIfRequested()
         }
     }
 

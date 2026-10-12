@@ -47,13 +47,14 @@ final class AppModel {
 
     func showHome() {
         if homeWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 560),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 660),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
             window.title = "Screen Playground"
+            window.titleVisibility = .hidden // the page shows the name; the title would overlap the glass sidebar
             window.titlebarAppearsTransparent = true
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: HomeView().environment(self).preferredColorScheme(.dark))
+            window.contentView = NSHostingView(rootView: HomeView().environment(self).preferredColorScheme(.light))
             window.center()
             window.setFrameAutosaveName("HomeWindow")
             homeWindow = NSWindowController(window: window)

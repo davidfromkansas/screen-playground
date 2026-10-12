@@ -96,6 +96,7 @@ final class EditorModel {
             snapshot = p.snapshot()
             time = min(p.document.editor.playheadSource, snapshot?.duration ?? 0)
             renderGeneration += 1
+            if UserDefaults.standard.bool(forKey: "PGOpenExport") { exportPresented = true } // debug/screenshot hook
         } catch {
             loadError = error.localizedDescription
         }

@@ -52,27 +52,56 @@ struct SidebarView: View {
     }
 }
 
-/// Vertical icon rail that switches sidebar panels.
-struct PanelRail: View {
+/// The floating glass sidebar: a segmented tab bar over the panel content.
+struct SidebarPanel: View {
     @Bindable var model: EditorModel
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 0) {
+            PanelTabs(model: model)
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+            SidebarView(model: model)
+        }
+        .glass(cornerRadius: Theme.panelRadius)
+    }
+}
+
+/// Segmented icon tabs that switch sidebar panels (disabled when the recording lacks that data).
+struct PanelTabs: View {
+    @Bindable var model: EditorModel
+
+    var body: some View {
+        HStack(spacing: 2) {
             ForEach(EditorPanel.allCases) { p in
                 let enabled = (p != .camera || model.hasCamera) && (p != .shortcuts || model.hasKeystrokes)
+                let selected = model.panel == p && model.selection == nil
                 Button {
                     model.selection = nil
                     model.panel = p
-                } label: { Image(systemName: p.icon) }
-                    .buttonStyle(IconButtonStyle(active: model.panel == p && model.selection == nil))
-                    .disabled(!enabled)
-                    .opacity(enabled ? 1 : 0.3)
-                    .help(enabled ? p.title : "\(p.title) — not available for this recording")
+                } label: {
+                    Image(systemName: p.icon)
+                        .font(.system(size: 14))
+                        .foregroundStyle(selected ? Theme.accentSoft : Theme.text)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
+                        .background(
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(selected ? Color.white : .clear)
+                                .shadow(color: .black.opacity(selected ? 0.12 : 0), radius: 2, y: 1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!enabled)
+                .opacity(enabled ? 1 : 0.3)
+                .help(enabled ? p.title : "\(p.title) — not available for this recording")
+                .accessibilityLabel(p.title)
             }
-            Spacer()
         }
-        .padding(.vertical, 10)
-        .frame(width: 44)
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.control))
     }
 }
 

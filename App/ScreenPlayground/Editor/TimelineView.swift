@@ -65,7 +65,7 @@ struct TimelineView: View {
     }
 
     func trackBackground(y: CGFloat, h: CGFloat, width: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.03))
+        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.control)
             .frame(width: width - 2 * Self.inset + 8, height: h)
             .offset(x: Self.inset - 4, y: y)
     }
@@ -169,12 +169,12 @@ struct ClipBlock: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(slice.speed == 1 ? Theme.clip : Theme.clip.mix(with: .orange, by: 0.25))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(slice.speed == 1 ? Theme.clip : Theme.clipFast)
                 .brightness(hovering ? 0.05 : 0)
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(selected ? Color.white : .clear, lineWidth: 2))
+                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(selected ? Theme.text : .clear, lineWidth: 2))
             label
-                .foregroundStyle(.black.opacity(0.78))
+                .foregroundStyle(Theme.clipText)
                 .lineLimit(1)
                 .padding(.horizontal, 10)
             if hovering || selected {
@@ -225,7 +225,7 @@ struct ClipBlock: View {
 
     func edge(leading: Bool) -> some View {
         Rectangle().fill(Color.black.opacity(0.001)).frame(width: min(10, max(width / 4, 4)))
-            .overlay(Capsule().fill(Color.black.opacity(0.45)).frame(width: 3, height: 18))
+            .overlay(Capsule().fill(Theme.clipText.opacity(0.45)).frame(width: 4, height: 20))
             .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
             .gesture(DragGesture(minimumDistance: 1).onChanged { v in
                 let base = dragBase ?? slice
@@ -311,20 +311,20 @@ struct RangeBlock: View {
         let selected = model.selection == kind
         let width = (outputEnd - outputStart) * pps
         ZStack {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(color.opacity(disabled ? 0.35 : 0.95))
-                .brightness(hovering ? 0.06 : 0)
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(selected ? Color.white : .clear, lineWidth: 2))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(color.opacity(disabled ? 0.3 : 1))
+                .brightness(hovering ? 0.05 : 0)
+                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(selected ? Theme.text : .clear, lineWidth: 2))
             if width > 90 {
                 HStack(spacing: 4) {
                     Image(systemName: icon)
                     Text(subtitle).lineLimit(1)
                 }
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(disabled ? 0.5 : 0.95))
+                .foregroundStyle(disabled ? Theme.text.opacity(0.6) : .white)
                 .padding(.horizontal, 10)
             } else if width > 26 {
-                Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(disabled ? Theme.text.opacity(0.6) : .white)
             }
             if hovering || selected {
                 HStack(spacing: 0) {
@@ -382,7 +382,7 @@ struct RulerView: View {
                 var p = Path()
                 p.move(to: CGPoint(x: x, y: size.height - (isMajor ? 9 : 5)))
                 p.addLine(to: CGPoint(x: x, y: size.height))
-                ctx.stroke(p, with: .color(.white.opacity(isMajor ? 0.35 : 0.18)), lineWidth: 1)
+                ctx.stroke(p, with: .color(Theme.text.opacity(isMajor ? 0.35 : 0.15)), lineWidth: 1)
                 if isMajor {
                     let label = major < 1 ? String(format: "%d:%04.1f", Int(t) / 60, t.truncatingRemainder(dividingBy: 60))
                         : String(format: "%d:%02d", Int(t.rounded()) / 60, Int(t.rounded()) % 60)
@@ -406,8 +406,9 @@ struct Playhead: View {
     var height: CGFloat
     var body: some View {
         VStack(spacing: 0) {
-            Image(systemName: "arrowtriangle.down.fill").font(.system(size: 13)).foregroundStyle(Theme.accentSoft)
-            Rectangle().fill(Theme.accentSoft).frame(width: 2)
+            Circle().fill(Theme.accent).frame(width: 13, height: 13).overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+            Rectangle().fill(Theme.accent).frame(width: 2)
         }
         .frame(width: Self.hitWidth, height: height)
         .contentShape(Rectangle())
