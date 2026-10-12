@@ -13,8 +13,9 @@ struct HomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 30)).foregroundStyle(Theme.accentSoft)
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable().interpolation(.high).frame(width: 48, height: 48)
+                    .accessibilityLabel("Screen Playground logo")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Screen Playground").font(.system(size: 22, weight: .bold))
                     Text("Beautiful screen recordings in minutes. Free for everyone.").font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
