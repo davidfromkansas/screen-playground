@@ -48,6 +48,12 @@ targets:
         product: Export
       - package: PlaygroundKit
         product: Capture
+      # The command-line tool ships inside the app (Contents/MacOS/pgctl) so agents can use it.
+      - target: pgctl
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
     settings:
       base:
         PRODUCT_NAME: Screen Playground
@@ -97,6 +103,9 @@ targets:
       base:
         PRODUCT_NAME: pgctl
         ENABLE_HARDENED_RUNTIME: NO
+      configs:
+        Release:
+          ENABLE_HARDENED_RUNTIME: YES
 schemes:
   ScreenPlayground:
     build:

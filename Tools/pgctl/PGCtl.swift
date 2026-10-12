@@ -22,6 +22,7 @@ struct PGCtl {
             case "targets": try LiveCommands.targets()
             case "record": try LiveCommands.record(args)
             case "mark": try LiveCommands.mark(args)
+            case "install": try Installer.run(args)
             case "make-fixture": try await makeFixture(args)
             case "export": try await export(args)
             case "render-frame": try await renderFrame(args)
@@ -47,6 +48,9 @@ struct PGCtl {
           pgctl record cancel | status
           pgctl mark caption "text" [--for S]            annotate the recording at this moment
           pgctl mark zoom [level] | cut-start | cut-end | speed-start [x] | speed-end | hold [S] | note "text"
+
+        Setup:
+          pgctl install [--force]                        link pgctl into ~/.local/bin
 
         Projects (no app needed):
           pgctl info <project>

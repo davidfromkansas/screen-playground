@@ -197,6 +197,9 @@ struct SettingsView: View {
                 LabeledContent("Add recording flag", value: "⌃⌥⌘F")
                 LabeledContent("Editor", value: "Space play · C split · X ripple delete · Z zoom · M mask · ⌘C copy frame")
             }
+            Section("Agents & command line") {
+                AgentSetupRow()
+            }
             Section("Permissions") {
                 ForEach(Permission.allCases) { p in
                     LabeledContent(p.title) {
@@ -211,6 +214,52 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 520)
+        .frame(width: 560, height: 600)
+    }
+}
+
+/// Installs the bundled `pgctl` on PATH by running its own `install` command (one source of truth).
+struct AgentSetupRow: View {
+    @State private var message: String?
+    @State private var failed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Let AI agents like Claude Code and Codex record and edit demos with the pgctl command-line tool.")
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Install Command-Line Tool") { install() }
+                Button("Copy Help Command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("pgctl help", forType: .string)
+                }
+            }
+            if let message {
+                Text(message)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(failed ? .red : .secondary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func install() {
+        let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/pgctl")
+        let process = Process()
+        process.executableURL = tool
+        process.arguments = ["install", "--force"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            failed = process.terminationStatus != 0
+            message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            failed = true
+            message = error.localizedDescription
+        }
     }
 }
