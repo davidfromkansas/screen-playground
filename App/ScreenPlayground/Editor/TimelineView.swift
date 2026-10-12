@@ -45,11 +45,12 @@ struct TimelineView: View {
                         masks(snap: snap, pps: pps)
                     }
                     Playhead(height: Self.totalH)
-                        .offset(x: Self.inset + model.time * pps - 6)
-                        .gesture(DragGesture().onChanged { v in
-                            model.seek((v.location.x + model.time * pps - 6 - Self.inset + 6) / pps)
+                        .offset(x: Self.inset + model.time * pps - Playhead.hitWidth / 2)
+                        .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline")).onChanged { v in
+                            model.seek((v.location.x - Self.inset) / pps)
                         })
                 }
+                .coordinateSpace(.named("timeline"))
                 .frame(width: contentW, height: Self.totalH, alignment: .topLeading)
             }
             .scrollDisabled(model.timelineZoom <= 1.01)
@@ -190,7 +191,10 @@ struct ClipBlock: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { model.selection = .slice(slice.id) }
+        .gesture(SpatialTapGesture(coordinateSpace: .named("timeline")).onEnded { v in
+            model.selection = .slice(slice.id)
+            model.seek((v.location.x - TimelineView.inset) / pps)
+        })
         .contextMenu { sliceMenu }
     }
 
@@ -360,14 +364,16 @@ struct RulerView: View {
 }
 
 struct Playhead: View {
+    static let hitWidth: CGFloat = 18
     var height: CGFloat
     var body: some View {
         VStack(spacing: 0) {
-            Image(systemName: "arrowtriangle.down.fill").font(.system(size: 11)).foregroundStyle(Theme.accentSoft)
+            Image(systemName: "arrowtriangle.down.fill").font(.system(size: 13)).foregroundStyle(Theme.accentSoft)
             Rectangle().fill(Theme.accentSoft).frame(width: 2)
         }
-        .frame(width: 12, height: height)
+        .frame(width: Self.hitWidth, height: height)
         .contentShape(Rectangle())
+        .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
     }
 }
 
