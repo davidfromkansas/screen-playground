@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screen Playground — free screen recorder for Mac</title>
+<meta name="description" content="Record your Mac and get a polished video with automatic zooms, a smooth cursor and beautiful backgrounds. Free, native, no account.">
+<meta property="og:title" content="Screen Playground">
+<meta property="og:description" content="A free Mac screen recorder that makes polished videos automatically.">
+<meta property="og:image" content="assets/editor.png">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #E9ECF1;
+    --surface: rgba(255, 255, 255, 0.72);
+    --surface-solid: #FFFFFF;
+    --stroke: rgba(255, 255, 255, 0.9);
+    --text: #1C1C1E;
+    --muted: #6B6B72;
+    --accent: #5B5BF6;
+    --accent-ink: #4646E6;
+    --record: #E5352D;
+    --shadow: 0 1px 2px rgba(30, 30, 60, 0.06), 0 12px 32px rgba(30, 30, 60, 0.10);
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --radius: 26px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-ink); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* Top bar */
+  .nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); text-decoration: none; }
+  .brand img { width: 32px; height: 32px; }
+  .nav-links { display: flex; gap: 8px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 19px;
+    background: var(--surface); border: 1px solid var(--stroke); box-shadow: var(--shadow);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+    color: var(--text); text-decoration: none; font-size: 14px; font-weight: 500;
+    transition: transform 160ms var(--ease-out);
+  }
+  .pill:active { transform: scale(0.97); }
+
+  /* Hero */
+  .hero { text-align: center; padding: 48px 0 32px; }
+  .hero-icon { width: 112px; height: 112px; margin: 0 auto 20px; display: block; filter: drop-shadow(0 12px 24px rgba(30, 30, 60, 0.18)); }
+  h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 16px; font-weight: 800; }
+  .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 620px; margin: 0 auto 32px; }
+  .cta { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .download {
+    display: inline-flex; align-items: center; gap: 10px; height: 56px; padding: 0 28px; border-radius: 28px;
+    background: linear-gradient(180deg, #6E6EFF, #5050F0); color: #fff; text-decoration: none;
+    font-size: 17px; font-weight: 650;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 24px rgba(80, 80, 240, 0.35);
+    transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+  }
+  .download:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .download:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 14px 30px rgba(80, 80, 240, 0.45); }
+  }
+  .download svg { width: 20px; height: 20px; }
+  .meta { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* Screenshot */
+  .shot { margin: 40px auto 0; max-width: 1080px; }
+  .shot img { width: 100%; height: auto; display: block; }
+
+  /* Features */
+  section { padding: 72px 0 0; }
+  h2 { font-size: clamp(26px, 3.6vw, 36px); letter-spacing: -0.02em; margin: 0 0 8px; text-align: center; }
+  .sub { color: var(--muted); text-align: center; margin: 0 auto 36px; max-width: 560px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--stroke); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 24px;
+    -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+  }
+  .card .ic {
+    width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 14px;
+    background: rgba(91, 91, 246, 0.12); color: var(--accent-ink);
+  }
+  .card .ic svg { width: 20px; height: 20px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: step; }
+  .step { counter-increment: step; }
+  .step::before {
+    content: counter(step); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 16px;
+    background: var(--text); color: #fff; font-weight: 700; font-size: 14px; margin-bottom: 12px;
+  }
+  kbd {
+    font: 600 13px -apple-system, BlinkMacSystemFont, sans-serif; padding: 2px 7px; border-radius: 6px;
+    background: var(--surface-solid); box-shadow: 0 1px 0 rgba(30, 30, 60, 0.2); white-space: nowrap;
+  }
+
+  /* Footer CTA */
+  .final { text-align: center; padding: 88px 0 40px; }
+  footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; text-align: center; }
+  footer a { color: var(--muted); }
+
+  @media (max-width: 860px) {
+    .grid, .steps { grid-template-columns: 1fr; }
+    .nav-links .hide-sm { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pill, .download { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <a class="brand" href="./"><img src="assets/icon.png" alt="" width="32" height="32">Screen Playground</a>
+      <div class="nav-links">
+        <a class="pill hide-sm" href="#features">Features</a>
+        <a class="pill" href="https://github.com/davidfromkansas/screen-playground">GitHub</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <img class="hero-icon" src="assets/icon.png" alt="Screen Playground app icon" width="112" height="112">
+      <h1>Screen recordings<br>that look edited.</h1>
+      <p class="lede">Record your Mac and get a polished video automatically — zooms that follow your clicks, a silky cursor and a beautiful background. Free, native and private.</p>
+      <div class="cta">
+        <a class="download" data-download href="https://github.com/davidfromkansas/screen-playground/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+          Download for Mac
+        </a>
+        <span class="meta" data-meta>Free · macOS 15 or later · Apple silicon &amp; Intel</span>
+      </div>
+    </header>
+
+    <div class="shot">
+      <img src="assets/editor.png" alt="The Screen Playground editor: a recording on a gradient wallpaper, styling controls on the right and a timeline below" width="2000" height="1294">
+    </div>
+
+    <section id="features">
+      <h2>Everything a great demo needs</h2>
+      <p class="sub">Record raw, then shape it in the editor. Nothing is baked in until you export.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.3-4.3M11 8v6M8 11h6"/></svg></div>
+          <h3>Automatic zoom</h3>
+          <p>Zooms follow your clicks so viewers always see what matters. Tune timing, aim them by hand, or use the glass loupe.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l14 8-6 1.5L10 19z"/></svg></div>
+          <h3>Smooth cursor</h3>
+          <p>Jittery mouse movement becomes a smooth glide, re-drawn sharp at any size, with click effects and motion blur.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><rect x="7" y="8" width="10" height="8" rx="1.5"/></svg></div>
+          <h3>Beautiful backgrounds</h3>
+          <p>Wallpapers, gradients, padding, rounded corners and shadows, in 16:9, 9:16, square and more.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg></div>
+          <h3>Fast editing</h3>
+          <p>Split, trim and ripple delete; speed up slow parts; blur sensitive areas; full undo.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></div>
+          <h3>Camera, mic &amp; music</h3>
+          <p>Add a webcam bubble or split-screen, your voice, system audio and background music.</p>
+        </div>
+        <div class="card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></div>
+          <h3>Export anywhere</h3>
+          <p>MP4 up to 4K at 60 fps, GIF or ProRes — or copy straight to the clipboard and paste into Slack.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Three steps</h2>
+      <p class="sub">From recording to a share-ready video in under a minute.</p>
+      <div class="steps">
+        <div class="card step"><h3>Record</h3><p>Press <kbd>⌥⌘↩</kbd> anywhere and pick a display, a window or an area.</p></div>
+        <div class="card step"><h3>Polish</h3><p>The editor opens with zooms already added. Tweak the style or keep the defaults.</p></div>
+        <div class="card step"><h3>Share</h3><p>Export a file or copy the video to your clipboard.</p></div>
+      </div>
+    </section>
+
+    <div class="final">
+      <h2>Free for everyone</h2>
+      <p class="sub">No account, no watermark, no tracking. Your recordings never leave your Mac.</p>
+      <div class="cta">
+        <a class="download" data-download href="https://github.com/davidfromkansas/screen-playground/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+          Download for Mac
+        </a>
+        <span class="meta" data-meta>Free · macOS 15 or later · Apple silicon &amp; Intel</span>
+      </div>
+    </div>
+
+    <footer>
+      <a href="https://github.com/davidfromkansas/screen-playground/releases">All releases</a> ·
+      <a href="https://github.com/davidfromkansas/screen-playground">Source on GitHub</a>
+    </footer>
+  </div>
+
+<script>
+  // Point the download buttons straight at the latest release's DMG and show its version.
+  // Without JavaScript (or if GitHub's API is unreachable) they open the latest release page.
+  (async () => {
+    try {
+      const res = await fetch("https://api.github.com/repos/davidfromkansas/screen-playground/releases/latest");
+      if (!res.ok) return;
+      const release = await res.json();
+      const dmg = (release.assets || []).find(a => a.name.endsWith(".dmg"));
+      if (!dmg) return;
+      const mb = Math.round(dmg.size / 1e6);
+      document.querySelectorAll("[data-download]").forEach(a => { a.href = dmg.browser_download_url; });
+      document.querySelectorAll("[data-meta]").forEach(s => {
+        s.textContent = `Version ${release.tag_name.replace(/^v/, "")} · ${mb} MB · macOS 15 or later · Apple silicon & Intel`;
+      });
+    } catch (_) { /* keep the fallback link */ }
+  })();
+</script>
+</body>
+</html>
