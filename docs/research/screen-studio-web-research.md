@@ -979,5 +979,3 @@ These would need hands-on verification in the app:
 - the export bitrates behind each quality preset.
 
 Third-party sources (TemperStack) mention items such as a "Smoothness 50%" setting and High/Medium/Low quality. These do not match the official documentation, so I excluded them.
-
-Scratch files from this research (the full changelog dump, every guide article's text, and the homepage text) are in /private/tmp/claude-501/-Users-david-lietjauw-screen-playground/392a95e4-b305-4397-8353-7f0edc7cb9fc/scratchpad/ss/. The most useful are `changelog_full.md`, `guide.txt` and `p_.txt`.
