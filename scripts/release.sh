@@ -24,6 +24,18 @@ TEAM=$(sed -E 's/.*\(([A-Z0-9]{10})\)".*/\1/' <<<"$IDENTITY_LINE")
 xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1 || { echo "Notary profile '$PROFILE' not found. See setup step 2."; exit 1; }
 echo "Signing as: $IDENTITY (team $TEAM)"
 
+# notarytool exits 0 even when Apple rejects the upload, so check the status explicitly.
+notarize() {
+  local out id
+  out=$(xcrun notarytool submit "$1" --keychain-profile "$PROFILE" --wait 2>&1) || true
+  echo "$out"
+  if ! grep -q "status: Accepted" <<<"$out"; then
+    id=$(grep -m1 -oE "id: [0-9a-f-]{36}" <<<"$out" | cut -d' ' -f2)
+    [[ -n "$id" ]] && xcrun notarytool log "$id" --keychain-profile "$PROFILE"
+    echo "Notarization failed."; exit 1
+  fi
+}
+
 BUILD="$ROOT/build/ReleaseDevID"
 APP="$BUILD/Build/Products/Release/Screen Playground.app"
 DMG="$ROOT/dist/ScreenPlayground-$VERSION.dmg"
@@ -33,12 +45,13 @@ xcodegen generate --quiet
 xcodebuild -project ScreenPlayground.xcodeproj -scheme ScreenPlayground -configuration Release -derivedDataPath "$BUILD" \
   -destination 'generic/platform=macOS' ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
   MARKETING_VERSION="$VERSION" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$TEAM" \
-  ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS="--timestamp" -quiet build
+  ENABLE_HARDENED_RUNTIME=YES CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO OTHER_CODE_SIGN_FLAGS="--timestamp" -quiet build
+codesign -d --entitlements - "$APP" 2>/dev/null | grep -q get-task-allow && { echo "Build still has get-task-allow; refusing to notarize."; exit 1; }
 codesign --verify --deep --strict --verbose=2 "$APP"
 
 echo "Notarizing the app…"
 ditto -c -k --keepParent "$APP" "$WORK/app.zip"
-xcrun notarytool submit "$WORK/app.zip" --keychain-profile "$PROFILE" --wait
+notarize "$WORK/app.zip"
 xcrun stapler staple "$APP"
 
 echo "Building the DMG…"
@@ -62,7 +75,7 @@ hdiutil create -volname "Screen Playground" -srcfolder "$STAGE" -ov -format UDZO
 codesign --sign "$IDENTITY" --timestamp "$DMG"
 
 echo "Notarizing the DMG…"
-xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+notarize "$DMG"
 xcrun stapler staple "$DMG"
 
 echo "Gatekeeper check:"
