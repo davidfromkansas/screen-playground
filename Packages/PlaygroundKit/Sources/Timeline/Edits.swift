@@ -99,6 +99,49 @@ public enum Edits {
         return out
     }
 
+    /// Removes a source range from every slice it touches (splitting slices as needed).
+    /// Used for transcript edits, filler-word removal and scripted cuts.
+    public static func removeSource(_ scene: Scene, range: SourceRange) throws -> Scene {
+        var out = scene
+        var slices: [Slice] = []
+        for s in scene.slices {
+            guard s.freezeDuration == nil, s.source.overlaps(range) else { slices.append(s); continue }
+            if range.start.seconds - s.source.start.seconds >= minimumSliceDuration / 2 {
+                var left = s
+                left.source.end = range.start
+                slices.append(left)
+            }
+            if s.source.end.seconds - range.end.seconds >= minimumSliceDuration / 2 {
+                var right = s
+                right.id = makeItemID()
+                right.source.start = range.end
+                slices.append(right)
+            }
+        }
+        guard !slices.isEmpty else { throw EditError.tooShort }
+        out.slices = slices
+        return out
+    }
+
+    /// Sets the speed of a source range, splitting slices at its boundaries.
+    public static func setSpeed(_ scene: Scene, source range: SourceRange, speed: Double) -> Scene {
+        var out = scene
+        var slices: [Slice] = []
+        for s in scene.slices {
+            guard s.freezeDuration == nil, s.source.overlaps(range) else { slices.append(s); continue }
+            let a = max(s.source.start.seconds, range.start.seconds), b = min(s.source.end.seconds, range.end.seconds)
+            if a - s.source.start.seconds > 0.001 { var l = s; l.source.end = SourceTime(a); slices.append(l) }
+            var mid = s
+            mid.id = makeItemID()
+            mid.source = SourceRange(a, b)
+            mid.timeScale = 1 / max(speed, 0.05)
+            slices.append(mid)
+            if s.source.end.seconds - b > 0.001 { var r = s; r.id = makeItemID(); r.source.start = SourceTime(b); slices.append(r) }
+        }
+        out.slices = slices
+        return out
+    }
+
     // MARK: Zooms
 
     /// Adds a zoom at output time `t`, sized to fit before the next zoom.

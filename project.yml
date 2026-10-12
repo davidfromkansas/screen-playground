@@ -1,0 +1,86 @@
+name: ScreenPlayground
+options:
+  bundleIdPrefix: dev.screenplayground
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+packages:
+  PlaygroundKit:
+    path: Packages/PlaygroundKit
+targets:
+  ScreenPlayground:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/ScreenPlayground
+    dependencies:
+      - package: PlaygroundKit
+        product: PlaygroundCore
+      - package: PlaygroundKit
+        product: Timeline
+      - package: PlaygroundKit
+        product: Motion
+      - package: PlaygroundKit
+        product: Composition
+      - package: PlaygroundKit
+        product: Render
+      - package: PlaygroundKit
+        product: Media
+      - package: PlaygroundKit
+        product: Export
+      - package: PlaygroundKit
+        product: Capture
+    settings:
+      base:
+        PRODUCT_NAME: Screen Playground
+        PRODUCT_BUNDLE_IDENTIFIER: dev.screenplayground.app
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: App/ScreenPlayground/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/ScreenPlayground/ScreenPlayground.entitlements
+        COMBINE_HIDPI_IMAGES: YES
+  pgctl:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Tools/pgctl
+    dependencies:
+      - package: PlaygroundKit
+        product: PlaygroundCore
+      - package: PlaygroundKit
+        product: Timeline
+      - package: PlaygroundKit
+        product: Composition
+      - package: PlaygroundKit
+        product: Render
+      - package: PlaygroundKit
+        product: Media
+      - package: PlaygroundKit
+        product: Export
+      - package: PlaygroundKit
+        product: TestSupport
+    settings:
+      base:
+        PRODUCT_NAME: pgctl
+        ENABLE_HARDENED_RUNTIME: NO
+schemes:
+  ScreenPlayground:
+    build:
+      targets:
+        ScreenPlayground: all
+    run:
+      config: Debug
+    archive:
+      config: Release

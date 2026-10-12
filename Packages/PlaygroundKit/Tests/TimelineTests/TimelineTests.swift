@@ -91,6 +91,21 @@ import Testing
         #expect(throws: EditError.outOfRange) { try Edits.addZoom(s, at: OutputTime(2)) }
     }
 
+    @Test func removeSourceRanges() throws {
+        var s = try Edits.removeSource(scene(), range: SourceRange(0, 1))
+        s = try Edits.removeSource(s, range: SourceRange(9, 10))
+        s = try Edits.removeSource(s, range: SourceRange(4, 5))
+        #expect(s.slices.map(\.source) == [SourceRange(1, 4), SourceRange(5, 9)])
+        #expect(TimeMap(slices: s.slices).duration == 7)
+        #expect(throws: EditError.tooShort) { try Edits.removeSource(scene(), range: SourceRange(0, 10)) }
+    }
+
+    @Test func speedForSourceRange() {
+        let s = Edits.setSpeed(scene(), source: SourceRange(2, 6), speed: 2)
+        #expect(s.slices.count == 3)
+        #expect(TimeMap(slices: s.slices).duration == 8)
+    }
+
     @Test func undoHistory() {
         var h = EditHistory<Int>(initial: 0)
         h.commit(1, name: "a")
