@@ -14,8 +14,14 @@ settings:
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "Screen Playground Dev"
     DEVELOPMENT_TEAM: ""
-    ENABLE_HARDENED_RUNTIME: YES
     DEAD_CODE_STRIPPING: YES
+    # One binary in Debug (no separate .debug.dylib), so a self-signed build launches.
+    ENABLE_DEBUG_DYLIB: NO
+  configs:
+    Debug:
+      ENABLE_HARDENED_RUNTIME: NO
+    Release:
+      ENABLE_HARDENED_RUNTIME: YES
 packages:
   PlaygroundKit:
     path: Packages/PlaygroundKit
