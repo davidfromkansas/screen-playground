@@ -97,24 +97,7 @@ struct TimelineView: View {
                 RangeBlock(model: model, kind: .zoom(zoom.id), color: Theme.zoom, disabled: zoom.disabled,
                            title: "Zoom", subtitle: "\(String(format: "%.1f", zoom.level))× · \(zoom.mode == .auto ? "Auto" : "Manual")\(zoom.style == .loupe ? " · Loupe" : "")",
                            icon: "plus.magnifyingglass", outputStart: first.start.seconds, outputEnd: last.end.seconds, pps: pps) { start0, end0 in
-                    // Keep zooms side by side: clamp between the neighbouring zooms.
-                    let others = model.doc.scene.zooms.filter { $0.id != zoom.id }.compactMap { z -> (Double, Double)? in
-                        let r = map.outputRanges(for: z.source)
-                        guard let a = r.first, let b = r.last else { return nil }
-                        return (a.start.seconds, b.end.seconds)
-                    }
-                    let lo = others.filter { $0.1 <= first.start.seconds + 0.001 }.map(\.1).max() ?? 0
-                    let hi = others.filter { $0.0 >= last.end.seconds - 0.001 }.map(\.0).min() ?? model.duration
-                    let len = end0 - start0
-                    let movingWhole = abs(len - (last.end.seconds - first.start.seconds)) < 0.0001
-                    var start = max(start0, lo), end = min(end0, hi)
-                    if movingWhole { start = min(max(start0, lo), hi - len); end = start + len }
-                    model.update("Move zoom", coalesce: true) { doc in
-                        guard let i = doc.scene.zooms.firstIndex(where: { $0.id == zoom.id }),
-                              let s = map.source(at: OutputTime(start))?.time, let e = map.source(at: OutputTime(end))?.time,
-                              e.seconds - s.seconds >= Edits.minimumZoomDuration else { return }
-                        doc.scene.zooms[i].source = SourceRange(s, e)
-                    }
+                    model.moveZoom(zoom.id, outputStart: start0, outputEnd: end0)
                 }
                 .contextMenu {
                     Button(zoom.disabled ? "Enable" : "Disable") { model.update("Toggle zoom") { d in

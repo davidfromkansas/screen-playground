@@ -58,6 +58,21 @@ targets:
         CODE_SIGN_ENTITLEMENTS: App/ScreenPlayground/ScreenPlayground.entitlements
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  ScreenPlaygroundTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: App/ScreenPlaygroundTests
+    dependencies:
+      - target: ScreenPlayground
+      - package: PlaygroundKit
+        product: TestSupport
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.screenplayground.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Screen Playground.app/Contents/MacOS/Screen Playground"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   pgctl:
     type: tool
     platform: macOS
@@ -87,6 +102,9 @@ schemes:
     build:
       targets:
         ScreenPlayground: all
+    test:
+      targets:
+        - ScreenPlaygroundTests
     run:
       config: Debug
     archive:

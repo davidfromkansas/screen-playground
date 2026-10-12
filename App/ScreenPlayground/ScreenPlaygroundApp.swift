@@ -33,7 +33,12 @@ struct ScreenPlaygroundApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController?
 
+    /// True when the app is only hosting unit tests: skip all UI and system setup.
+    static let isHostingTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        || NSClassFromString("XCTestCase") != nil
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if Self.isHostingTests { return }
         MainActor.assumeIsolated {
             NSApp.appearance = NSAppearance(named: .darkAqua)
             statusItem = StatusItemController()

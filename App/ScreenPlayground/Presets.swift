@@ -12,8 +12,11 @@ struct Preset: Codable, Identifiable, Hashable {
 
 @MainActor
 enum PresetStore {
+    /// Tests point this at a temporary folder.
+    static var folderOverride: URL?
+
     static var folder: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = folderOverride ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Screen Playground/Presets", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir

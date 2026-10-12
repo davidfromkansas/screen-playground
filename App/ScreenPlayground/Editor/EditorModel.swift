@@ -373,6 +373,34 @@ final class EditorModel {
         selection = .mask(mask.id)
     }
 
+    /// Moves or resizes a zoom (output times). Zooms stay side by side: the result is clamped between
+    /// the neighbouring zooms, and a whole-block move keeps its length.
+    func moveZoom(_ id: ItemID, outputStart start0: Double, outputEnd end0: Double) {
+        let map = TimeMap(slices: doc.scene.slices)
+        guard let zoom = doc.scene.zooms.first(where: { $0.id == id }),
+              let first = map.outputRanges(for: zoom.source).first, let last = map.outputRanges(for: zoom.source).last else { return }
+        let others = doc.scene.zooms.filter { $0.id != id }.compactMap { z -> (Double, Double)? in
+            let r = map.outputRanges(for: z.source)
+            guard let a = r.first, let b = r.last else { return nil }
+            return (a.start.seconds, b.end.seconds)
+        }
+        let lo = others.filter { $0.1 <= first.start.seconds + 0.001 }.map(\.1).max() ?? 0
+        let hi = others.filter { $0.0 >= last.end.seconds - 0.001 }.map(\.0).min() ?? map.duration
+        let len = end0 - start0
+        let movingWhole = abs(len - (last.end.seconds - first.start.seconds)) < 0.0001
+        var start = max(start0, lo), end = min(end0, hi)
+        if movingWhole {
+            start = min(max(start0, lo), max(hi - len, lo))
+            end = min(start + len, hi)
+        }
+        update("Move zoom", coalesce: true) { doc in
+            guard let i = doc.scene.zooms.firstIndex(where: { $0.id == id }),
+                  let s = map.source(at: OutputTime(start))?.time, let e = map.source(at: OutputTime(end))?.time,
+                  e.seconds - s.seconds >= Edits.minimumZoomDuration else { return }
+            doc.scene.zooms[i].source = SourceRange(s, e)
+        }
+    }
+
     func regenerateAutoZooms() {
         guard let project else { return }
         let clicks = ProjectFactory.autoZoomClicks(events: project.events, manifest: project.manifest)
