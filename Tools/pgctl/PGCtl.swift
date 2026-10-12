@@ -9,7 +9,7 @@ import Timeline
 
 /// Headless tool for tests and automation.
 ///
-///   pgctl make-fixture <out.screenplayground> [--duration 6]
+///   pgctl make-fixture <out.screenplayground> [--duration 6] [--clicks 1.5,2.2,4]
 ///   pgctl export <project.screenplayground> <out.mp4|.gif> [--res 1080] [--fps 60] [--quality social] [--aspect 9:16]
 ///                [--speed <from>:<to>:<speed>] [--cut <from>:<to>] [--preset <file.spgpreset>]
 ///   pgctl render-frame <project.screenplayground> <seconds> <out.png> [--res 1080]
@@ -37,7 +37,7 @@ struct PGCtl {
     static func usage() -> Never {
         print("""
         usage:
-          pgctl make-fixture <out.screenplayground> [--duration 6]
+          pgctl make-fixture <out.screenplayground> [--duration 6] [--clicks 1.5,2.2,4]
           pgctl export <project> <out.mp4|.gif|.mov> [--res 1080] [--fps 60] [--quality studio|social|web|webLow]
                        [--aspect auto|16:9|9:16|1:1|4:3|3:4|4:5] [--cut from:to] [--speed from:to:x] [--auto-zoom] [--preset file]
           pgctl render-frame <project> <seconds> <out.png> [--res 1080]
@@ -59,6 +59,7 @@ struct PGCtl {
         guard let path = args.first else { usage() }
         var opts = FixtureFactory.Options()
         if let d = option(args, "--duration").flatMap(Double.init) { opts.duration = d }
+        if let c = option(args, "--clicks") { opts.clickTimes = c.split(separator: ",").compactMap { Double($0) } }
         let bundle = try await FixtureFactory.makeProject(at: URL(fileURLWithPath: path), options: opts)
         print(bundle.url.path)
     }

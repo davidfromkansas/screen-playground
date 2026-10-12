@@ -77,6 +77,14 @@
   .shot { margin: 40px auto 0; max-width: 1080px; }
   .shot img { width: 100%; height: auto; display: block; }
 
+  /* Demo video */
+  .demo { max-width: 960px; margin: 0 auto; }
+  .demo video {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 18px;
+    background: #D9DEE8; box-shadow: 0 2px 4px rgba(30, 30, 60, 0.08), 0 24px 60px rgba(30, 30, 60, 0.18);
+  }
+  .demo figcaption { margin-top: 14px; text-align: center; color: var(--muted); font-size: 14px; }
+
   /* Features */
   section { padding: 72px 0 0; }
   h2 { font-size: clamp(26px, 3.6vw, 36px); letter-spacing: -0.02em; margin: 0 0 8px; text-align: center; }
@@ -150,6 +158,17 @@
       <img src="assets/editor.png" alt="The Screen Playground editor: a recording on a gradient wallpaper, styling controls on the right and a timeline below" width="2000" height="1294">
     </div>
 
+    <section id="demo">
+      <h2>See it in action</h2>
+      <p class="sub">Exported straight from Screen Playground — no manual editing. Zooms follow the clicks, then ease back out.</p>
+      <figure class="demo">
+        <video data-demo src="assets/demo.mp4" poster="assets/demo-poster.jpg" width="1920" height="1080"
+               muted loop playsinline preload="metadata" controls
+               aria-label="Demo: a recording on a gradient background that zooms in on each click, pans, then zooms back out"></video>
+        <figcaption>12 seconds · auto-zoom, smooth cursor and wallpaper, all applied automatically</figcaption>
+      </figure>
+    </section>
+
     <section id="features">
       <h2>Everything a great demo needs</h2>
       <p class="sub">Record raw, then shape it in the editor. Nothing is baked in until you export.</p>
@@ -216,6 +235,17 @@
   </div>
 
 <script>
+  // Autoplay the demo (muted) while it's on screen; leave it paused for Reduce Motion.
+  (() => {
+    const video = document.querySelector("[data-demo]");
+    if (!video || matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) return;
+    video.removeAttribute("controls");
+    new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) video.play().catch(() => video.setAttribute("controls", ""));
+      else video.pause();
+    }, { threshold: 0.4 }).observe(video);
+  })();
+
   // Point the download buttons straight at the latest release's DMG and show its version.
   // Without JavaScript (or if GitHub's API is unreachable) they open the latest release page.
   (async () => {
