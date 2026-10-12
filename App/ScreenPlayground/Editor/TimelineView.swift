@@ -183,10 +183,12 @@ struct ClipBlock: View {
                     Spacer(minLength: 0)
                     edge(leading: false)
                 }
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, Self.gap / 2)
         .contentShape(Rectangle())
+        .animation(Anim.hover, value: hovering)
         .onHover { hovering = $0 }
         .gesture(SpatialTapGesture(coordinateSpace: .named("timeline")).onEnded { v in
             model.selection = .slice(slice.id)
@@ -332,10 +334,12 @@ struct RangeBlock: View {
                     Spacer(minLength: 0)
                     handle(leading: false, width: width)
                 }
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, ClipBlock.gap / 2)
         .contentShape(Rectangle())
+        .animation(Anim.hover, value: hovering)
         .onHover { hovering = $0 }
         .onTapGesture { model.selection = kind }
         .help("\(title) · \(subtitle)")

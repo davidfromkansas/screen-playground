@@ -28,6 +28,7 @@ struct ExportSheet: View {
             }
             if let result {
                 done(result)
+                    .transition(.opacity.combined(with: .offset(y: 8)))
             } else if let progress {
                 VStack(alignment: .leading, spacing: 8) {
                     ProgressView(value: progress).tint(Theme.accent)
@@ -37,11 +38,13 @@ struct ExportSheet: View {
                         Button("Cancel") { cancel.cancel() }.buttonStyle(SmallButtonStyle())
                     }
                 }
+                .transition(.opacity)
             } else {
-                form
+                form.transition(.opacity)
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(.red) }
         }
+        .animation(Anim.easeOut(0.25), value: phase)
         .padding(24)
         .frame(width: 480)
         .preferredColorScheme(.light)
@@ -90,11 +93,15 @@ struct ExportSheet: View {
         }
     }
 
+    /// Which of form / rendering / done is showing (drives the crossfade).
+    var phase: Int { result != nil ? 2 : (progress != nil ? 1 : 0) }
+
     @ViewBuilder func done(_ url: URL) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(copied ? "Copied to clipboard — paste it into Messages, Slack or Mail." : "Exported \(url.lastPathComponent)",
                   systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
+                .symbolEffect(.bounce, value: url)
             if let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int {
                 Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file) + " · " + url.deletingLastPathComponent().path)
                     .font(.system(size: 11)).foregroundStyle(Theme.secondaryText).lineLimit(2)

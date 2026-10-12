@@ -108,6 +108,6 @@ struct CountdownView: View {
             .frame(width: 200, height: 200)
             .glass(cornerRadius: 100)
             .contentTransition(.numericText(countsDown: true))
-            .animation(.snappy, value: model.number)
+            .animation(Anim.easeOut(0.3), value: model.number)
     }
 }

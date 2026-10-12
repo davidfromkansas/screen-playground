@@ -29,6 +29,49 @@ enum Theme {
     static let controlRadius: CGFloat = 18
 }
 
+// MARK: - Motion tokens
+
+/// Curves and durations from Emil Kowalski's animation guidelines. Keyboard-driven and
+/// high-frequency actions (split, delete, play, undo, the recording picker) deliberately don't animate.
+enum Anim {
+    /// Strong ease-out for anything entering, exiting or giving feedback.
+    static func easeOut(_ duration: Double = 0.2) -> Animation { .timingCurve(0.23, 1, 0.32, 1, duration: duration) }
+    /// Strong ease-in-out for things moving on screen (selection indicators).
+    static func easeInOut(_ duration: Double = 0.25) -> Animation { .timingCurve(0.77, 0, 0.175, 1, duration: duration) }
+    /// Plain CSS-style `ease` for hover and colour changes.
+    static let hover = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.15)
+    /// Button press feedback.
+    static let press = easeOut(0.16)
+    /// Apple-style spring for the rare moment of delight.
+    static let delight = Animation.spring(duration: 0.5, bounce: 0.2)
+    /// Scale a pressed control shrinks to.
+    static let pressedScale: CGFloat = 0.97
+}
+
+/// Press feedback that respects Reduce Motion (no scale, just a slight dim).
+struct PressFeedback: ViewModifier {
+    var pressed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(pressed && !reduceMotion ? Anim.pressedScale : 1)
+            .opacity(pressed && reduceMotion ? 0.8 : 1)
+            .animation(Anim.press, value: pressed)
+    }
+}
+
+extension View {
+    func pressFeedback(_ pressed: Bool) -> some View { modifier(PressFeedback(pressed: pressed)) }
+}
+
+/// Plain button that only adds press feedback.
+struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.pressFeedback(configuration.isPressed)
+    }
+}
+
 // MARK: - Liquid Glass (macOS 26) with a frosted-material fallback (macOS 15)
 
 enum GlassSupport {
@@ -122,8 +165,7 @@ struct LiquidTintedButtonStyle: ButtonStyle {
             .padding(.horizontal, 18)
             .frame(minHeight: 38)
             .glassEffect(.regular.tint(tint.opacity(isEnabled ? 1 : 0.45)).interactive(), in: Capsule())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            .pressFeedback(configuration.isPressed)
     }
 }
 
@@ -139,7 +181,7 @@ struct TintedCapsuleButtonStyle: ButtonStyle {
             .background(Capsule().fill(tint.gradient))
             .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
             .shadow(color: tint.opacity(0.35), radius: 8, y: 4)
-            .opacity(configuration.isPressed ? 0.85 : 1)
+            .pressFeedback(configuration.isPressed)
     }
 }
 
@@ -151,7 +193,7 @@ struct FallbackGlassButtonStyle: ButtonStyle {
             .padding(.horizontal, 14)
             .frame(minHeight: 32)
             .glass()
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .pressFeedback(configuration.isPressed)
     }
 }
 
@@ -184,18 +226,22 @@ struct PanelSection<Content: View>: View {
     }
 }
 
-/// Segmented "pill" options for an enum: selected pill is white with a soft shadow.
+/// Segmented "pill" options for an enum. The white selection pill slides to the chosen option.
 struct PillPicker<T: Hashable>: View {
     var options: [T]
     @Binding var selection: T
     var label: (T) -> String
     var icon: ((T) -> String)? = nil
+    @Namespace private var indicator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         FlowLayout(spacing: 4) {
             ForEach(options, id: \.self) { option in
                 let selected = option == selection
-                Button { selection = option } label: {
+                Button {
+                    withAnimation(reduceMotion ? Anim.hover : Anim.easeInOut(0.25)) { selection = option }
+                } label: {
                     HStack(spacing: 5) {
                         if let icon { Image(systemName: icon(option)).font(.system(size: 11)) }
                         Text(label(option)).font(.system(size: 12, weight: selected ? .semibold : .medium))
@@ -203,11 +249,15 @@ struct PillPicker<T: Hashable>: View {
                     .foregroundStyle(selected ? Theme.accentSoft : Theme.text)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(selected ? Color.white : Theme.control)
-                            .shadow(color: .black.opacity(selected ? 0.12 : 0), radius: 2, y: 1)
-                    )
+                    .background {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.control)
+                        if selected {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+                                .matchedGeometryEffect(id: "selection", in: indicator)
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -266,11 +316,12 @@ struct HelpToggle: View {
 struct Disclosure<Content: View>: View {
     var title: String
     @State private var open = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button { withAnimation(.snappy) { open.toggle() } } label: {
+            Button { withAnimation(reduceMotion ? Anim.hover : Anim.easeOut(0.2)) { open.toggle() } } label: {
                 HStack {
                     Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.text)
                     Spacer()
@@ -285,6 +336,7 @@ struct Disclosure<Content: View>: View {
                 VStack(alignment: .leading, spacing: 12) { content }
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.control))
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
         .padding(.vertical, 8)
@@ -301,6 +353,7 @@ struct SmallButtonStyle: ButtonStyle {
             .padding(.vertical, 5)
             .background(Capsule().fill(configuration.isPressed ? Theme.controlHover : Theme.control))
             .opacity(isEnabled ? 1 : 0.4)
+            .pressFeedback(configuration.isPressed)
     }
 }
 
@@ -314,6 +367,8 @@ struct IconButtonStyle: ButtonStyle {
             .background(Circle().fill(active ? Theme.accent.opacity(0.14) : (configuration.isPressed ? Theme.controlHover : .clear)))
             .foregroundStyle(active ? Theme.accentSoft : Theme.text)
             .contentShape(Circle())
+            .pressFeedback(configuration.isPressed)
+            .animation(Anim.hover, value: active)
     }
 }
 

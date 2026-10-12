@@ -27,6 +27,16 @@ extension EditorModel {
 struct SidebarView: View {
     @Bindable var model: EditorModel
 
+    /// Changes whenever a different inspector or panel is shown.
+    var contentKey: String {
+        switch model.selection {
+        case let .zoom(id)?: "zoom-\(id)"
+        case let .slice(id)?: "slice-\(id)"
+        case let .mask(id)?: "mask-\(id)"
+        case nil: "panel-\(model.panel)"
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -47,8 +57,11 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
+            .id(contentKey)
+            .transition(.opacity)
         }
         .scrollIndicators(.never)
+        .animation(Anim.hover, value: contentKey)
     }
 }
 
@@ -71,6 +84,8 @@ struct SidebarPanel: View {
 /// Segmented icon tabs that switch sidebar panels (disabled when the recording lacks that data).
 struct PanelTabs: View {
     @Bindable var model: EditorModel
+    @Namespace private var indicator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
@@ -78,19 +93,24 @@ struct PanelTabs: View {
                 let enabled = (p != .camera || model.hasCamera) && (p != .shortcuts || model.hasKeystrokes)
                 let selected = model.panel == p && model.selection == nil
                 Button {
-                    model.selection = nil
-                    model.panel = p
+                    withAnimation(reduceMotion ? Anim.hover : Anim.easeInOut(0.25)) {
+                        model.selection = nil
+                        model.panel = p
+                    }
                 } label: {
                     Image(systemName: p.icon)
                         .font(.system(size: 14))
                         .foregroundStyle(selected ? Theme.accentSoft : Theme.text)
                         .frame(maxWidth: .infinity)
                         .frame(height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .fill(selected ? Color.white : .clear)
-                                .shadow(color: .black.opacity(selected ? 0.12 : 0), radius: 2, y: 1)
-                        )
+                        .background {
+                            if selected {
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+                                    .matchedGeometryEffect(id: "tab", in: indicator)
+                            }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

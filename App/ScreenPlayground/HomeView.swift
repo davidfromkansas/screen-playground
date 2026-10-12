@@ -91,7 +91,7 @@ struct HomeView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 18)], spacing: 18) {
-                        ForEach(app.recents, id: \.self) { url in ProjectCard(url: url) }
+                        ForEach(Array(app.recents.enumerated()), id: \.element) { i, url in ProjectCard(url: url, index: i) }
                     }
                     .padding(6)
                 }
@@ -112,8 +112,11 @@ struct HomeView: View {
 struct ProjectCard: View {
     @Environment(AppModel.self) private var app
     let url: URL
+    var index = 0
     @State private var thumb: NSImage?
     @State private var hovering = false
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button { app.openProject(url) } label: {
@@ -139,10 +142,17 @@ struct ProjectCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(hovering ? Theme.accent : Color.black.opacity(0.04), lineWidth: hovering ? 2 : 1))
             .shadow(color: Color(red: 0.12, green: 0.12, blue: 0.24).opacity(hovering ? 0.14 : 0.07), radius: hovering ? 14 : 10, y: 6)
-            .animation(.snappy(duration: 0.18), value: hovering)
+            .animation(Anim.hover, value: hovering)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .onHover { hovering = $0 }
+        // Staggered entrance (50ms apart, first eight cards only) when Home opens.
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared || reduceMotion ? 0 : 8)
+        .onAppear {
+            guard !appeared else { return }
+            withAnimation(Anim.easeOut(0.3).delay(Double(min(index, 8)) * 0.05)) { appeared = true }
+        }
         .contextMenu {
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             Button("Move to Trash", role: .destructive) {
