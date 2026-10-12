@@ -67,6 +67,20 @@ import Timeline
         #expect(img.height > img.width)
     }
 
+    @Test func keyboardShortcutKeycaps() throws {
+        var snap = snapshot { $0.config.shortcuts.enabled = true }
+        snap.shortcuts = [ShortcutEvent(t: 1.8, index: 0, keys: ["⇧", "⌘", "K"])]
+        let ctx = try #require(MetalContext.shared)
+        let comp = Compositor(context: ctx)
+        let frame = SceneEvaluator.evaluate(snap, at: OutputTime(2.2), width: 1280, height: 720)
+        let caps = try #require(frame.keycaps)
+        #expect(caps.keys == ["⇧", "⌘", "K"])
+        let screen = FixtureFactory.screenImage(width: 1920, height: 1080, frameIndex: 1).flatMap(ImageIOHelpers.pixelBuffer)
+        let img = try #require(comp.renderImage(frame, screen: screen, cursorSet: .system))
+        ImageIOHelpers.writePNG(img, to: Self.outDir.appendingPathComponent("keycaps.png"))
+        #expect(SceneEvaluator.evaluate(snap, at: OutputTime(3.5), width: 1280, height: 720).keycaps == nil)
+    }
+
     @Test func barcodeRoundTrip() throws {
         let img = try #require(FixtureFactory.screenImage(width: 640, height: 360, frameIndex: 1234))
         let pb = try #require(ImageIOHelpers.pixelBuffer(from: img))

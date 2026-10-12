@@ -16,6 +16,9 @@ public struct RenderSnapshot: Sendable {
     public var sourcePixelHeight: Double
     public var hasCamera: Bool
     public var cameraAspect: Double
+    /// Shortcuts to overlay (empty when the overlay is off).
+    public var shortcuts: [ShortcutEvent]
+    private var keystrokes: [KeyStroke]
 
     public init(document: ProjectDocument, manifest: RecordingManifest, events: RecordingEvents,
                 sourcePixelWidth: Double, sourcePixelHeight: Double, hasCamera: Bool = false, cameraAspect: Double = 16.0 / 9) {
@@ -31,6 +34,13 @@ public struct RenderSnapshot: Sendable {
         self.sourcePixelHeight = sourcePixelHeight
         self.hasCamera = hasCamera
         self.cameraAspect = cameraAspect
+        self.keystrokes = events.keys
+        self.shortcuts = Self.shortcuts(for: document, keys: events.keys)
+    }
+
+    static func shortcuts(for doc: ProjectDocument, keys: [KeyStroke]) -> [ShortcutEvent] {
+        guard doc.config.shortcuts.enabled else { return [] }
+        return ShortcutDetector.detect(keys, includeSingleKeys: doc.config.shortcuts.includeSingleKeys, hidden: doc.scene.hiddenShortcutIndices)
     }
 
     /// Rebuilds derived data after a document change (reusing the cursor track when cursor settings are unchanged).
@@ -41,6 +51,7 @@ public struct RenderSnapshot: Sendable {
             copy.cursor = CursorTrack(events: events, captureRect: manifest.captureRect, config: newDoc.config.cursor)
         }
         copy.timeMap = TimeMap(slices: newDoc.scene.slices)
+        copy.shortcuts = Self.shortcuts(for: newDoc, keys: keystrokes)
         let motionChanged = newDoc.scene != document.scene || newDoc.config.motion != document.config.motion
             || newDoc.config.cursor != document.config.cursor
         if motionChanged {
@@ -167,6 +178,13 @@ public enum SceneEvaluator {
                                 offsetX: cfg.frame.shadowStyle == .directional ? cos(angle) * dist : 0,
                                 offsetY: cfg.frame.shadowStyle == .directional ? sin(angle) * dist : dist)
 
+        // Keyboard shortcut overlay (bottom centre, above any captions).
+        var keycaps: KeycapDesc?
+        if !snap.shortcuts.isEmpty, let (sc, alpha) = ShortcutDetector.active(snap.shortcuts, at: sourceTime.seconds) {
+            let height = short * 0.065 * cfg.shortcuts.size
+            keycaps = KeycapDesc(keys: sc.keys, centerX: w / 2, bottomY: h - short * 0.06, height: height, opacity: alpha)
+        }
+
         return FrameDescription(
             width: width, height: height, background: cfg.background, sourceTime: sourceTime, crop: cfg.output.crop,
             screenQuads: screenQuads, cornerRadius: cfg.frame.cornerRadius * shortScale(short) * center.zoom,
@@ -174,7 +192,7 @@ public enum SceneEvaluator {
             insetColor: RGBAColor(r: cfg.frame.insetColor.r, g: cfg.frame.insetColor.g, b: cfg.frame.insetColor.b,
                                   a: cfg.frame.insetOpacity),
             cursorID: cursorID, cursorPoses: cursorPoses, clickEffects: effects, masks: masks, loupe: loupe,
-            camera: camera, screenOpacity: layout.screenVisible ? 1 : 0)
+            camera: camera, keycaps: keycaps, screenOpacity: layout.screenVisible ? 1 : 0)
     }
 
     static func shortScale(_ short: Double) -> Double { short / 1080 }

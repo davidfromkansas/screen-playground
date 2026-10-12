@@ -74,6 +74,16 @@ public struct ShadowDesc: Hashable, Sendable {
     public var offsetY: Double
 }
 
+/// A keyboard-shortcut overlay: keycap labels drawn as a pill near the bottom of the frame.
+public struct KeycapDesc: Hashable, Sendable {
+    public var keys: [String]
+    public var centerX: Double
+    public var bottomY: Double
+    /// Keycap height in pixels.
+    public var height: Double
+    public var opacity: Double
+}
+
 /// Everything the compositor needs to draw one output frame. Plain values, no GPU types.
 public struct FrameDescription: Sendable {
     public var width: Int
@@ -95,6 +105,7 @@ public struct FrameDescription: Sendable {
     public var masks: [MaskDesc]
     public var loupe: LoupeDesc?
     public var camera: CameraDesc?
+    public var keycaps: KeycapDesc?
     /// Screen layer opacity (0 for camera-only layouts).
     public var screenOpacity: Double
 }

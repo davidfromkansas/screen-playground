@@ -163,3 +163,33 @@ import Testing
         #expect(out.zooms.contains { $0.mode == .manual })
     }
 }
+
+@Suite struct ShortcutDetectorTests {
+    func key(_ t: Double, _ code: Int, _ chars: String, _ mods: Modifiers, repeating: Bool = false) -> KeyStroke {
+        KeyStroke(t: t, keyCode: code, characters: chars, charactersIgnoringModifiers: chars, modifiers: mods, isRepeat: repeating)
+    }
+
+    @Test func picksShortcutsNotTyping() {
+        let keys = [
+            key(0.0, 4, "h", []), key(0.1, 34, "i", []),               // typing → ignored
+            key(1.0, 1, "s", [.command]),                               // ⌘S
+            key(2.0, 40, "k", [.command, .shift]),                      // ⇧⌘K
+            key(3.0, 36, "\r", []),                                     // Return alone → only with single keys
+            key(3.5, 1, "s", [.command], repeating: true),              // auto-repeat → ignored
+            key(4.0, 123, "", [.option, .shift]),                       // ⌥⇧←
+        ]
+        let plain = ShortcutDetector.detect(keys, includeSingleKeys: false)
+        #expect(plain.map(\.text) == ["⌘ S", "⇧ ⌘ K", "⌥ ⇧ ←"])
+        let withSingles = ShortcutDetector.detect(keys, includeSingleKeys: true)
+        #expect(withSingles.map(\.text).contains("↩"))
+        #expect(ShortcutDetector.detect(keys, includeSingleKeys: false, hidden: [2]).map(\.text) == ["⇧ ⌘ K", "⌥ ⇧ ←"])
+    }
+
+    @Test func visibilityWindowAndFades() {
+        let s = [ShortcutEvent(t: 1, index: 0, keys: ["⌘", "S"])]
+        #expect(ShortcutDetector.active(s, at: 0.9) == nil)
+        #expect(ShortcutDetector.active(s, at: 1.5)?.1 == 1)
+        #expect((ShortcutDetector.active(s, at: 2.1)?.1 ?? 1) < 0.5)
+        #expect(ShortcutDetector.active(s, at: 2.3) == nil)
+    }
+}

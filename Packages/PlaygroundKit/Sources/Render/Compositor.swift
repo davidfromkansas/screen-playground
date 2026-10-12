@@ -16,6 +16,7 @@ public final class Compositor: @unchecked Sendable {
     private var cursorTextures: [String: (MTLTexture, CursorArt.Sprite)] = [:]
     private var backgroundCache: (key: String, texture: MTLTexture)?
     private var imageCache: [String: MTLTexture] = [:]
+    private var keycapCache: (key: String, texture: MTLTexture, size: CGSize)?
     private var accum: MTLTexture?
     private var scratchA: MTLTexture?
     private var scratchB: MTLTexture?
@@ -130,7 +131,20 @@ public final class Compositor: @unchecked Sendable {
             }
         }
 
-        // 8. Cursor
+        // 8. Keyboard shortcut keycaps
+        if let caps = frame.keycaps, caps.opacity > 0.01, let (tex, size) = keycapTexture(caps) {
+            pass(cb, target: target, load: .load) { enc in
+                var u = LayerUniforms()
+                u.mode = LayerMode.texture.rawValue
+                u.canvas = canvas
+                u.rect = SIMD4(Float(caps.centerX - size.width / 2), Float(caps.bottomY - size.height), Float(size.width), Float(size.height))
+                u.params = SIMD4(0, 2, 0, 0) // premultiplied RGBA
+                u.opacity = Float(caps.opacity)
+                draw(enc, u, texture: tex, pipeline: context.overPipeline)
+            }
+        }
+
+        // 9. Cursor
         if !frame.cursorPoses.isEmpty, let (tex, sprite) = cursorTexture(id: frame.cursorID, set: cursorSet) {
             if frame.cursorPoses.count == 1 {
                 pass(cb, target: target, load: .load) { enc in
@@ -378,6 +392,17 @@ public final class Compositor: @unchecked Sendable {
     /// Point size and hotspot of the sprite that will be drawn (the art may differ from the recorded cursor).
     public func cursorMetrics(id: String?, set: CursorSet) -> (size: CGSize, hotSpot: CGPoint)? {
         cursorTexture(id: id, set: set).map { ($0.1.size, $0.1.hotSpot) }
+    }
+
+    private func keycapTexture(_ caps: KeycapDesc) -> (MTLTexture, CGSize)? {
+        let key = "\(caps.keys.joined(separator: "|"))@\(Int(caps.height))"
+        if let c = keycapCache, c.key == key { return (c.texture, c.size) }
+        guard let img = KeycapArt.image(keys: caps.keys, height: caps.height),
+              let tex = try? loader.newTexture(cgImage: img, options: [.SRGB: false, .textureStorageMode: MTLStorageMode.private.rawValue])
+        else { return nil }
+        let size = CGSize(width: img.width, height: img.height)
+        keycapCache = (key, tex, size)
+        return (tex, size)
     }
 
     // MARK: - Helpers
