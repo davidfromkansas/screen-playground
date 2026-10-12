@@ -168,3 +168,33 @@ public struct RecordingEvents: Sendable {
 
     public var downClicks: [MouseClick] { clicks.filter { $0.phase == .down } }
 }
+
+/// An annotation dropped while recording (by an agent or a demo script). `t` is source time.
+public struct RecordingMark: Hashable, Codable, Sendable {
+    public enum Kind: String, Codable, Sendable, CaseIterable {
+        /// Show `text` as a caption from here until the next caption (or `value` seconds).
+        case caption
+        /// Zoom on the next click; `value` is the zoom level.
+        case zoom
+        /// Remove everything between a cut-start and the following cut-end.
+        case cutStart = "cut-start", cutEnd = "cut-end"
+        /// Speed up from here to the next `speedEnd`; `value` is the speed.
+        case speedStart = "speed-start", speedEnd = "speed-end"
+        /// Deliberate pause that idle-cutting must keep (`value` = seconds).
+        case hold
+        /// Free-form note (step boundaries, etc.); not used by the edit.
+        case note
+    }
+
+    public var t: Double
+    public var kind: Kind
+    public var text: String?
+    public var value: Double?
+
+    public init(t: Double, kind: Kind, text: String? = nil, value: Double? = nil) {
+        self.t = t
+        self.kind = kind
+        self.text = text
+        self.value = value
+    }
+}

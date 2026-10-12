@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem = StatusItemController()
             HotKeys.shared.register()
             AppModel.shared.recoverUnfinishedRecordings()
+            ControlServer.shared.start()
             if !ProcessInfo.processInfo.arguments.contains("-PGNoHome") { AppModel.shared.showHome() }
             ComponentGallery.showIfRequested()
         }
@@ -59,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if !Self.isHostingTests { ControlServer.shared.stop() }
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {

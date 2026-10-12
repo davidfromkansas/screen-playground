@@ -58,6 +58,22 @@ final class RecorderController {
     private var countdownWindow: CountdownWindow?
     private var tick: Timer?
     private var autoStopAt: Double?
+    /// Annotations dropped by agents while recording; written next to the events on stop.
+    private var marks: [RecordingMark] = []
+    /// Set while an agent (not a person) owns the current recording.
+    private(set) var automation: AutomationOptions?
+
+    /// How an agent wants a recording made (see `ControlServer`).
+    struct AutomationOptions {
+        var microphoneID: String?
+        var systemAudio = false
+        var countdown = 0
+        var maxDuration: Double?
+        var name: String?
+        var openEditor = false
+        /// Where to save the project (defaults to the projects folder).
+        var folder: URL?
+    }
 
     init() {
         microphoneID = UserDefaults.standard.string(forKey: "rec.mic")
@@ -156,13 +172,30 @@ final class RecorderController {
     }
 
     private func startSession(target: RecordingTarget) async {
+        do {
+            _ = try await startSessionThrowing(target: target)
+        } catch {
+            AppModel.shared.presentError(error)
+        }
+    }
+
+    private func startSessionThrowing(target: RecordingTarget) async throws -> URL {
         var options = RecordingOptions(target: target)
-        options.microphoneID = microphoneID
-        options.cameraID = cameraID
-        options.captureSystemAudio = captureSystemAudio
+        if let automation {
+            // Agents get exactly what they asked for, never the person's mic/camera defaults.
+            options.microphoneID = automation.microphoneID
+            options.cameraID = nil
+            options.captureSystemAudio = automation.systemAudio
+        } else {
+            options.microphoneID = microphoneID
+            options.cameraID = cameraID
+            options.captureSystemAudio = captureSystemAudio
+        }
         options.hideDesktopIcons = hideDesktopIcons
-        let name = Self.recordingName(for: target, windows: windows)
-        let url = ProjectBundle.uniqueURL(in: AppModel.shared.projectsFolder, name: name)
+        if windows.isEmpty { refreshWindows() }
+        let name = automation?.name ?? Self.recordingName(for: target, windows: windows)
+        let url = ProjectBundle.uniqueURL(in: automation?.folder ?? AppModel.shared.projectsFolder, name: name)
+        marks = []
         do {
             let session = try RecordingSession(options: options, bundleURL: url)
             session.onUnexpectedStop = { [weak self] _ in Task { @MainActor in self?.stop() } }
@@ -175,11 +208,77 @@ final class RecorderController {
             tick = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.updateTick() }
             }
+            return url
         } catch {
             state = .idle
+            automation = nil
             lastError = error.localizedDescription
-            AppModel.shared.presentError(error)
+            throw error
         }
+    }
+
+    // MARK: Automation (agents)
+
+    /// Starts recording immediately for an agent and returns the project URL once frames are flowing.
+    func startAutomated(target: RecordingTarget, options: AutomationOptions) async throws -> URL {
+        guard state == .idle else {
+            throw ControlError("busy", "A recording is already in progress.", fix: "Run `pgctl record stop` or `pgctl record cancel` first.")
+        }
+        guard PermissionCenter.isGranted(.screenRecording) else {
+            throw ControlError("permission", "Screen Recording permission is not granted.",
+                               fix: "Open Screen Playground and allow Screen Recording in System Settings › Privacy & Security, then reopen the app.")
+        }
+        automation = options
+        autoStopAt = options.maxDuration
+        if case let .window(id) = target, let pid = CaptureCatalog.windows().first(where: { $0.id == id })?.pid {
+            NSRunningApplication(processIdentifier: pid)?.activate()
+        }
+        if options.countdown > 0 {
+            let screenFrame = Self.nsFrame(for: target)
+            countdownWindow = CountdownWindow(frame: screenFrame)
+            for n in stride(from: options.countdown, through: 1, by: -1) {
+                state = .countdown(n)
+                countdownWindow?.show(number: n)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            countdownWindow?.close()
+            countdownWindow = nil
+        }
+        return try await startSessionThrowing(target: target)
+    }
+
+    /// Adds an annotation at the current recording time; returns that time.
+    @discardableResult
+    func addMark(_ kind: RecordingMark.Kind, text: String? = nil, value: Double? = nil) throws -> Double {
+        guard let session, state == .recording else {
+            throw ControlError("not-recording", "Nothing is being recorded.", fix: "Start one with `pgctl record start`.")
+        }
+        let t = session.elapsed
+        marks.append(RecordingMark(t: t, kind: kind, text: text, value: value))
+        return t
+    }
+
+    /// Stops, finalizes and returns the project. Opens the editor only when asked.
+    func finish(openEditor: Bool) async throws -> ProjectBundle {
+        guard state == .recording, let session else {
+            throw ControlError("not-recording", "Nothing is being recorded.")
+        }
+        state = .finishing
+        tick?.invalidate()
+        widget?.close()
+        widget = nil
+        defer {
+            self.session = nil
+            state = .idle
+            automation = nil
+            autoStopAt = nil
+        }
+        let bundle = try await session.stop()
+        if !marks.isEmpty { try JSONLines.write(marks, to: bundle.marksFile) }
+        try ProjectFactory.finalize(bundle, config: PresetStore.configForNewRecordings)
+        AppModel.shared.reloadRecents()
+        if openEditor { AppModel.shared.openProject(bundle.url) }
+        return bundle
     }
 
     private func updateTick() {
@@ -197,27 +296,23 @@ final class RecorderController {
 
     func addFlag() { session?.addFlag() }
 
+    /// Stop from the UI, hotkey or auto-stop. An agent's recording is finished by the agent's own
+    /// `record stop` when possible; if a person stops it, it still finalizes (without the editor).
     func stop() {
-        guard state == .recording, let session else { return }
-        state = .finishing
-        tick?.invalidate()
-        widget?.close()
-        widget = nil
+        guard state == .recording, session != nil else { return }
+        let openEditor = automation.map { $0.openEditor } ?? true
         Task {
             do {
-                let bundle = try await session.stop()
-                try ProjectFactory.finalize(bundle, config: PresetStore.configForNewRecordings)
-                self.session = nil
-                state = .idle
-                AppModel.shared.reloadRecents()
-                AppModel.shared.openProject(bundle.url)
+                let bundle = try await finish(openEditor: openEditor)
+                lastFinished = bundle.url
             } catch {
-                self.session = nil
-                state = .idle
                 AppModel.shared.presentError(error)
             }
         }
     }
+
+    /// The most recent project finished by `stop()` (lets an agent find a recording a person stopped).
+    private(set) var lastFinished: URL?
 
     func deleteRecording() {
         guard let session else { return }
@@ -229,6 +324,8 @@ final class RecorderController {
             await session.cancel()
             self.session = nil
             state = .idle
+            automation = nil
+            autoStopAt = nil
         }
     }
 

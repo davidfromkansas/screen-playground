@@ -21,6 +21,8 @@ public struct ProjectBundle: Sendable, Hashable {
     public var clicksFile: URL { eventsFolder.appendingPathComponent("clicks.jsonl") }
     public var keysFile: URL { eventsFolder.appendingPathComponent("keys.jsonl") }
     public var geometryFile: URL { eventsFolder.appendingPathComponent("window-geometry.jsonl") }
+    /// Annotations dropped by an agent or demo script while recording.
+    public var marksFile: URL { eventsFolder.appendingPathComponent("marks.jsonl") }
     public var cursorsIndexFile: URL { cursorsFolder.appendingPathComponent("cursors.json") }
 
     public func channelURL(_ info: ChannelInfo) -> URL { recordingFolder.appendingPathComponent(info.file) }
@@ -96,6 +98,10 @@ public struct ProjectBundle: Sendable, Hashable {
             events.cursors = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         }
         return events
+    }
+
+    public func loadMarks() -> [RecordingMark] {
+        JSONLines.read(RecordingMark.self, from: marksFile).sorted { $0.t < $1.t }
     }
 }
 

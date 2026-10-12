@@ -7,43 +7,55 @@ import Render
 import TestSupport
 import Timeline
 
-/// Headless tool for tests and automation.
-///
-///   pgctl make-fixture <out.screenplayground> [--duration 6] [--clicks 1.5,2.2,4]
-///   pgctl export <project.screenplayground> <out.mp4|.gif> [--res 1080] [--fps 60] [--quality social] [--aspect 9:16]
-///                [--speed <from>:<to>:<speed>] [--cut <from>:<to>] [--preset <file.spgpreset>]
-///   pgctl render-frame <project.screenplayground> <seconds> <out.png> [--res 1080]
-///   pgctl info <project.screenplayground>
+/// Command-line control of Screen Playground, for people, scripts and AI agents.
+/// Every command accepts `--json` for one machine-readable JSON object on stdout.
 @main
 struct PGCtl {
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())
+        if let i = args.firstIndex(of: "--json") { Output.json = true; args.remove(at: i) }
         guard let command = args.first else { usage() }
         args.removeFirst()
         do {
             switch command {
+            case "status": try LiveCommands.status()
+            case "targets": try LiveCommands.targets()
+            case "record": try LiveCommands.record(args)
+            case "mark": try LiveCommands.mark(args)
             case "make-fixture": try await makeFixture(args)
             case "export": try await export(args)
             case "render-frame": try await renderFrame(args)
             case "info": try await info(args)
+            case "help", "--help", "-h": usage(exitCode: 0)
             default: usage()
             }
         } catch {
-            FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
-            exit(1)
+            Output.fail(error)
         }
     }
 
-    static func usage() -> Never {
+    static func usage(exitCode: Int32 = 2) -> Never {
         print("""
-        usage:
-          pgctl make-fixture <out.screenplayground> [--duration 6] [--clicks 1.5,2.2,4]
-          pgctl export <project> <out.mp4|.gif|.mov> [--res 1080] [--fps 60] [--quality studio|social|web|webLow]
+        pgctl — control Screen Playground from the terminal (add --json to any command for agent-friendly output)
+
+        Recording (drives the Screen Playground app; it launches in the background if needed):
+          pgctl status                                   app version and permissions
+          pgctl targets                                  displays and windows you can record
+          pgctl record start [--app Safari [--title T] | --window ID | --display N | --area x,y,w,h]
+                             [--mic [name]] [--system-audio] [--countdown 0] [--max-duration S] [--name N] [--folder DIR] [--open-editor]
+          pgctl record stop [--open-editor]              finish, auto-zoom, save; prints the project path
+          pgctl record cancel | status
+          pgctl mark caption "text" [--for S]            annotate the recording at this moment
+          pgctl mark zoom [level] | cut-start | cut-end | speed-start [x] | speed-end | hold [S] | note "text"
+
+        Projects (no app needed):
+          pgctl info <project>
+          pgctl export <project> <out.mp4|.gif|.mov> [--res 720|1080|1440|2160] [--fps 60] [--quality studio|social|web|webLow]
                        [--aspect auto|16:9|9:16|1:1|4:3|3:4|4:5] [--cut from:to] [--speed from:to:x] [--auto-zoom] [--preset file]
           pgctl render-frame <project> <seconds> <out.png> [--res 1080]
-          pgctl info <project>
+          pgctl make-fixture <out.screenplayground> [--duration 6] [--clicks 1.5,2.2,4]
         """)
-        exit(2)
+        exit(exitCode)
     }
 
     static func option(_ args: [String], _ name: String) -> String? {
@@ -61,7 +73,7 @@ struct PGCtl {
         if let d = option(args, "--duration").flatMap(Double.init) { opts.duration = d }
         if let c = option(args, "--clicks") { opts.clickTimes = c.split(separator: ",").compactMap { Double($0) } }
         let bundle = try await FixtureFactory.makeProject(at: URL(fileURLWithPath: path), options: opts)
-        print(bundle.url.path)
+        Output.emit(["project": .string(bundle.url.path)]) { bundle.url.path }
     }
 
     /// Applies command-line edits (aspect, cuts, speed, preset) to a document.
@@ -115,7 +127,13 @@ struct PGCtl {
             }
         }
         FileHandle.standardError.write(Data("\n".utf8))
-        print("exported \(out.path) in \(String(format: "%.2f", Date().timeIntervalSince(start)))s")
+        let seconds = Date().timeIntervalSince(start)
+        let bytes = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int) ?? 0
+        let duration = TimeMap(slices: doc.scene.slices).duration
+        Output.emit(["output": .string(out.path), "bytes": .number(Double(bytes)), "duration": .number((duration * 100).rounded() / 100),
+                     "renderSeconds": .number((seconds * 100).rounded() / 100)]) {
+            "exported \(out.path) in \(String(format: "%.2f", seconds))s"
+        }
     }
 
     static func renderFrame(_ args: [String]) async throws {
@@ -135,19 +153,44 @@ struct PGCtl {
                                          camera: camera?.frame(at: frame.sourceTime.seconds), cursorSet: doc.config.cursor.set)
         else { throw ExportError.writerFailed("render failed") }
         ImageIOHelpers.writePNG(img, to: URL(fileURLWithPath: args[2]))
-        print(args[2])
+        Output.emit(["image": .string(args[2]), "width": .number(Double(size.width)), "height": .number(Double(size.height))]) { args[2] }
     }
 
     static func info(_ args: [String]) async throws {
         guard let path = args.first else { usage() }
         let project = try await LoadedProject.load(ProjectBundle(url: URL(fileURLWithPath: path)))
         let m = project.manifest
-        print("name:      \(project.document.name)")
-        print("status:    \(m.status.rawValue)   target: \(m.target.rawValue) (\(m.targetName))")
-        print("duration:  \(String(format: "%.2f", m.duration))s   source: \(Int(project.sourcePixelSize.width))×\(Int(project.sourcePixelSize.height))")
-        print("channels:  \(m.channels.map(\.kind.rawValue).joined(separator: ", "))")
-        print("events:    \(project.events.moves.count) moves, \(project.events.downClicks.count) clicks, \(project.events.keys.count) keys, \(project.events.cursors.count) cursors")
-        print("edit:      \(project.document.scene.slices.count) clips, \(project.document.scene.zooms.count) zooms, output \(String(format: "%.2f", TimeMap(slices: project.document.scene.slices).duration))s")
+        let scene = project.document.scene
+        let map = TimeMap(slices: scene.slices)
+        func r2(_ v: Double) -> JSONValue { .number((v * 100).rounded() / 100) }
+        func outputRanges(_ source: SourceRange) -> JSONValue {
+            .array(map.outputRanges(for: source).map { ["from": r2($0.start.seconds), "to": r2($0.end.seconds)] })
+        }
+        let json: JSONValue = [
+            "project": .string(path),
+            "name": .string(project.document.name),
+            "status": .string(m.status.rawValue),
+            "target": .string(m.target.rawValue), "targetName": .string(m.targetName),
+            "sourceDuration": r2(m.duration),
+            "outputDuration": r2(map.duration),
+            "sourceSize": ["width": .number(Double(project.sourcePixelSize.width)), "height": .number(Double(project.sourcePixelSize.height))],
+            "aspect": .string(project.document.config.output.aspect.rawValue),
+            "channels": .array(m.channels.map { .string($0.kind.rawValue) }),
+            "events": ["moves": .number(Double(project.events.moves.count)), "clicks": .number(Double(project.events.downClicks.count)),
+                       "keys": .number(Double(project.events.keys.count)), "marks": .number(Double(project.bundle.loadMarks().count))],
+            "clips": .array(scene.slices.map { ["source": ["from": r2($0.source.start.seconds), "to": r2($0.source.end.seconds)], "speed": r2($0.speed)] }),
+            "zooms": .array(scene.zooms.map { ["output": outputRanges($0.source), "level": r2($0.level), "auto": .bool($0.isAuto)] }),
+        ]
+        Output.emit(json) {
+            """
+            name:      \(project.document.name)
+            status:    \(m.status.rawValue)   target: \(m.target.rawValue) (\(m.targetName))
+            duration:  \(String(format: "%.2f", m.duration))s   source: \(Int(project.sourcePixelSize.width))×\(Int(project.sourcePixelSize.height))
+            channels:  \(m.channels.map(\.kind.rawValue).joined(separator: ", "))
+            events:    \(project.events.moves.count) moves, \(project.events.downClicks.count) clicks, \(project.events.keys.count) keys, \(project.events.cursors.count) cursors
+            edit:      \(scene.slices.count) clips, \(scene.zooms.count) zooms, output \(String(format: "%.2f", map.duration))s
+            """
+        }
     }
 }
 
