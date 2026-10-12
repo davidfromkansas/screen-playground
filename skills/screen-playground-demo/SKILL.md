@@ -50,7 +50,8 @@ idle time is cut and captions are added. You drive it with `pgctl` (add `--json`
 - Use `"speed": 2` on long typing, `"hold"` after a result you want viewers to see, and `"zoom"` on the
   click that matters most.
 - Record a single window at a fixed `windowSize` so nothing else on screen leaks into the video.
-- Use test data only. Password fields are refused by design — sign in to a test account beforehand.
+- Use made-up example data. Password fields are refused by design — if the app being demoed needs a login,
+  ask the user to sign in to it before the run.
 
 ## When something goes wrong
 
@@ -59,7 +60,7 @@ idle time is cut and captions are added. You drive it with `pgctl` (add `--json`
 | `permission` | Ask the user to allow the named permission for Screen Playground, then retry. |
 | `target-not-found` | The message lists visible targets; fix the step's text/label or add a `wait` before it. |
 | `target-covered` | A popup (autofill, password manager, notification) is in the way; ask the user to close it or turn it off for that site. |
-| `secure-field` | Don't type passwords; use an already signed-in test account. |
+| `secure-field` | Don't type passwords; ask the user to sign in to the app being demoed first, then skip the login steps. |
 | `aborted` | The user pressed Esc or moved the mouse — ask before trying again. |
 | `busy` | Another recording is running; `pgctl record status`, then `pgctl record stop` or `cancel`. |
 | `app-not-running` / `app-not-installed` | Ask the user to open/install Screen Playground. |

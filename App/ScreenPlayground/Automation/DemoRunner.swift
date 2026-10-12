@@ -326,7 +326,7 @@ final class DemoRunner {
 
     private func secureFieldError() -> ControlError {
         ControlError("secure-field", "Refused to type into a password field",
-                     fix: "Demos must not contain real passwords. Use a test account that's already signed in, or skip this step.")
+                     fix: "Demos never type passwords. If the app needs a login, sign in to it before running the demo and remove this step.")
     }
 
     private func pause(_ seconds: Double) async throws {

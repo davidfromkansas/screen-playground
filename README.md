@@ -27,7 +27,8 @@ Then just ask: *"Make a 20-second demo of the signup flow on localhost:3000."*
 - Allow **Screen Recording** and **Accessibility** for Screen Playground. Accessibility is what lets it click and type.
 - While a demo runs, your cursor moves on its own. **Press Esc or move the mouse to stop it**; whatever was
   recorded so far is kept.
-- It won't type into password fields, and it won't click when a popup is covering the target. Use test accounts.
+- It won't type into password fields, and it won't click when a popup is covering the target. If the app you're
+  demoing needs a login, sign in to it yourself before the demo starts.
 - Cloud-hosted agents can't use it: Codex cloud tasks, claude.ai on the web and Claude Code on the web run on
   remote machines and can't see your screen.
 
