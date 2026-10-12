@@ -54,6 +54,8 @@ final class EditorModel {
     var selection: EditorSelection?
     var exportPresented = false
     var timelineZoom: Double = 1 // multiplier on fit-to-width
+    /// Source frame inside each zoom, for the manual-target picker.
+    private(set) var zoomFrames: [ItemID: NSImage] = [:]
 
     // Playback
     private(set) var time: Double = 0
@@ -64,6 +66,8 @@ final class EditorModel {
     private var displayTimer: Timer?
     private var audioPlayer: AVPlayer?
     private var audioDirty = true
+    private var audioStarted = false
+    private var audioTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var snapshotTask: Task<Void, Never>?
 
@@ -74,6 +78,10 @@ final class EditorModel {
     }
 
     var doc: ProjectDocument { history.current }
+    var sourceAspect: Double {
+        guard let p = project, p.sourcePixelSize.height > 0 else { return 16.0 / 9 }
+        return Double(p.sourcePixelSize.width / p.sourcePixelSize.height)
+    }
     var duration: Double { snapshot?.duration ?? 0 }
     var hasCamera: Bool { project?.cameraURL != nil }
     var hasKeystrokes: Bool { !(project?.events.keys.isEmpty ?? true) }
@@ -100,8 +108,13 @@ final class EditorModel {
         change(&d)
         guard d != history.current else { return }
         let slicesChanged = d.scene.slices != history.current.scene.slices || d.config.audio != history.current.config.audio
+        let editedZoom = zoomBeingEdited(old: history.current, new: d)
         history.commit(d, name: name, coalesce: coalesce)
-        if slicesChanged { audioDirty = true }
+        if let editedZoom { showZoom(editedZoom) }
+        if slicesChanged {
+            audioDirty = true
+            refreshAudioIfPlaying()
+        }
         documentChanged()
     }
 
@@ -112,6 +125,51 @@ final class EditorModel {
             update(name, coalesce: coalesce) { $0.scene = s }
         } catch {
             NSSound.beep()
+        }
+    }
+
+    /// The zoom whose look (level, target, mode, style) just changed, if any.
+    private func zoomBeingEdited(old: ProjectDocument, new: ProjectDocument) -> ItemID? {
+        for z in new.scene.zooms {
+            guard let before = old.scene.zooms.first(where: { $0.id == z.id }) else { continue }
+            if before.level != z.level || before.manualTarget != z.manualTarget || before.mode != z.mode || before.style != z.style {
+                return z.id
+            }
+        }
+        return nil
+    }
+
+    /// Moves the playhead to where a zoom has fully settled, so the preview shows its real result.
+    func showZoom(_ id: ItemID) {
+        guard !isPlaying, let z = doc.scene.zooms.first(where: { $0.id == id }) else { return }
+        let ranges = TimeMap(slices: doc.scene.slices).outputRanges(for: z.source)
+        guard let r = ranges.first else { return }
+        let settled = r.start.seconds + min(max(r.duration * 0.6, 0), 1.0)
+        let fullySettled = time >= r.start.seconds + min(r.duration * 0.6, 1.0) && time < r.end.seconds
+        if !fullySettled { seek(settled) }
+    }
+
+    /// Loads the recorded frame in the middle of a zoom for its target picker.
+    func loadZoomFrame(_ id: ItemID) async {
+        guard zoomFrames[id] == nil, let p = project, let url = p.displayURL,
+              let z = doc.scene.zooms.first(where: { $0.id == id }) else { return }
+        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        gen.maximumSize = CGSize(width: 640, height: 640)
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = CMTime(seconds: 0.2, preferredTimescale: 600)
+        let mid = (z.source.start.seconds + z.source.end.seconds) / 2
+        if let (cg, _) = try? await gen.image(at: CMTime(seconds: mid, preferredTimescale: 600)) {
+            zoomFrames[id] = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        }
+    }
+
+    /// Clears the selection if its item no longer exists (deleted, undone).
+    private func validateSelection() {
+        switch selection {
+        case let .slice(id)?: if !doc.scene.slices.contains(where: { $0.id == id }) { selection = nil }
+        case let .zoom(id)?: if !doc.scene.zooms.contains(where: { $0.id == id }) { selection = nil }
+        case let .mask(id)?: if !doc.scene.masks.contains(where: { $0.id == id }) { selection = nil }
+        case nil: break
         }
     }
 
@@ -131,6 +189,7 @@ final class EditorModel {
     var canRedo: Bool { history.canRedo }
 
     private func documentChanged() {
+        validateSelection()
         guard let project, let current = snapshot else { return }
         let d = doc
         // Rebuild motion off the main thread; latest edit wins.
@@ -192,7 +251,13 @@ final class EditorModel {
             MainActor.assumeIsolated { self?.advance() }
         }
         RunLoop.main.add(displayTimer!, forMode: .common)
-        Task { await prepareAudio(); syncAudio(force: true); audioPlayer?.play() }
+        audioTask?.cancel()
+        audioTask = Task {
+            await prepareAudio()
+            guard isPlaying else { return }
+            syncAudio(force: true)
+            audioPlayer?.play()
+        }
     }
 
     func pause() {
@@ -205,12 +270,20 @@ final class EditorModel {
 
     private func advance() {
         guard isPlaying else { return }
-        var t = playStartTime + (HostClock.now() - playStartHost)
+        // Once audio is actually running it is the master clock; before that (and with no audio) use host time.
+        var t: Double
+        if let player = audioPlayer, player.rate > 0, player.currentItem?.status == .readyToPlay, audioStarted {
+            t = player.currentTime().seconds
+        } else {
+            t = playStartTime + (HostClock.now() - playStartHost)
+            if let player = audioPlayer, player.rate > 0, abs(player.currentTime().seconds - t) < 0.15 { audioStarted = true }
+        }
         if t >= duration {
             if loopPlayback {
                 t = 0
                 playStartTime = 0
                 playStartHost = HostClock.now()
+                audioStarted = false
                 syncAudio(force: true)
             } else {
                 time = duration
@@ -220,15 +293,21 @@ final class EditorModel {
         }
         time = t
         renderGeneration += 1
-        syncAudio(force: false)
     }
 
     private func prepareAudio() async {
         guard audioDirty, let project else { return }
         audioDirty = false
-        guard let result = try? await AudioCompositionBuilder.build(document: doc, sources: project.audioSources,
-                                                                    backgroundMusic: LoadedProject.backgroundMusicURL(for: doc)),
-              result.hasAudio else {
+        let music = LoadedProject.backgroundMusicURL(for: doc)
+        let result: AudioCompositionBuilder.Result
+        do {
+            result = try await AudioCompositionBuilder.build(document: doc, sources: project.audioSources, backgroundMusic: music)
+        } catch {
+            NSLog("Screen Playground: audio preview unavailable: \(error)")
+            audioPlayer = nil
+            return
+        }
+        guard result.hasAudio else {
             audioPlayer = nil
             return
         }
@@ -236,15 +315,30 @@ final class EditorModel {
         item.audioMix = result.audioMix
         item.audioTimePitchAlgorithm = .spectral
         if let player = audioPlayer { player.replaceCurrentItem(with: item) } else { audioPlayer = AVPlayer(playerItem: item) }
+        audioPlayer?.automaticallyWaitsToMinimizeStalling = false
     }
 
+    /// Seeks the audio to the video time. Called on play, seek and loop only (never every frame:
+    /// constant re-seeking makes audio choppy).
     private func syncAudio(force: Bool) {
         guard let player = audioPlayer else { return }
-        let current = player.currentTime().seconds
-        if force || abs(current - time) > 0.08 {
+        if force {
+            audioStarted = false
             player.seek(to: CMTime(seconds: time, preferredTimescale: 48000), toleranceBefore: .zero, toleranceAfter: .zero)
         }
         if isPlaying, player.rate == 0 { player.play() }
+    }
+
+    /// Rebuilds the audio mix after an edit; if playing, picks up seamlessly at the current time.
+    private func refreshAudioIfPlaying() {
+        guard isPlaying else { return }
+        audioTask?.cancel()
+        audioTask = Task {
+            await prepareAudio()
+            guard !Task.isCancelled, isPlaying else { return }
+            syncAudio(force: true)
+            audioPlayer?.play()
+        }
     }
 
     func step(_ delta: Double) { seek(time + delta) }

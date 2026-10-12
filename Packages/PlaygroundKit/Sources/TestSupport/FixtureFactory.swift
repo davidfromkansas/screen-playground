@@ -76,6 +76,8 @@ public enum FixtureFactory {
         public var width: Int = 1920
         public var height: Int = 1080
         public var clickTimes: [Double] = [1.5, 2.2, 4.0]
+        /// Time ranges with no video frames, like an idle screen in a real (variable frame rate) recording.
+        public var idleGaps: [ClosedRange<Double>] = []
         public init() {}
     }
 
@@ -145,6 +147,8 @@ public enum FixtureFactory {
         writer.startSession(atSourceTime: .zero)
         let frames = Int(options.duration * Double(options.fps))
         for i in 0..<frames {
+            let t = Double(i) / Double(options.fps)
+            if options.idleGaps.contains(where: { $0.contains(t) }) { continue }
             while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 1_000_000) }
             guard let pool = adaptor.pixelBufferPool else { break }
             var pb: CVPixelBuffer?

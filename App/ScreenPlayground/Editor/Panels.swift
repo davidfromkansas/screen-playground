@@ -9,6 +9,19 @@ extension EditorModel {
     func binding<V: Equatable>(_ keyPath: WritableKeyPath<ProjectDocument, V>, _ name: String) -> Binding<V> {
         Binding(get: { self.doc[keyPath: keyPath] }, set: { v in self.update(name, coalesce: true) { $0[keyPath: keyPath] = v } })
     }
+
+    /// Binding to a field of a timeline item found by ID. Safe if the item is deleted while a view still
+    /// holds the binding (SwiftUI may read it once more): reads fall back, writes are ignored.
+    func item<T: Identifiable, V: Equatable>(_ list: WritableKeyPath<PlaygroundCore.Scene, [T]>, _ id: ItemID, _ field: WritableKeyPath<T, V>,
+                                             fallback: V, _ name: String) -> Binding<V> where T.ID == ItemID {
+        Binding(get: {
+            self.doc.scene[keyPath: list].first { $0.id == id }?[keyPath: field] ?? fallback
+        }, set: { v in
+            self.update(name, coalesce: true) { d in
+                if let i = d.scene[keyPath: list].firstIndex(where: { $0.id == id }) { d.scene[keyPath: list][i][keyPath: field] = v }
+            }
+        })
+    }
 }
 
 struct SidebarView: View {
@@ -449,61 +462,84 @@ struct ZoomInspector: View {
     var id: ItemID
 
     var body: some View {
-        if let i = model.doc.scene.zooms.firstIndex(where: { $0.id == id }) {
-            let zoom = model.doc.scene.zooms[i]
+        if let zoom = model.doc.scene.zooms.first(where: { $0.id == id }) {
             InspectorHeader(title: "Zoom", model: model)
             PanelSection(title: "Zoom level", trailing: AnyView(Button("Apply to all") {
                 model.update("Apply zoom level") { $0.scene = Edits.applyZoomLevelToAll($0.scene, level: zoom.level) }
             }.buttonStyle(SmallButtonStyle()))) {
-                ResettableSlider(value: model.binding(\.scene.zooms[i].level, "Zoom level"), range: 1.1...5, defaultValue: 2,
+                ResettableSlider(value: model.item(\.zooms, id, \.level, fallback: zoom.level, "Zoom level"), range: 1.1...5, defaultValue: 2,
                                  format: { String(format: "%.1f×", $0) })
             }
             PanelSection(title: "Style") {
-                PillPicker(options: [ZoomStyle.classic, .loupe], selection: model.binding(\.scene.zooms[i].style, "Zoom style"),
+                PillPicker(options: [ZoomStyle.classic, .loupe], selection: model.item(\.zooms, id, \.style, fallback: zoom.style, "Zoom style"),
                            label: { $0 == .classic ? "Classic" : "Glass Loupe" }, icon: { $0 == .classic ? "plus.magnifyingglass" : "circle.circle" })
             }
             PanelSection(title: "Mode") {
-                PillPicker(options: [ZoomMode.auto, .manual], selection: model.binding(\.scene.zooms[i].mode, "Zoom mode"),
+                PillPicker(options: [ZoomMode.auto, .manual], selection: model.item(\.zooms, id, \.mode, fallback: zoom.mode, "Zoom mode"),
                            label: { $0 == .auto ? "Auto (follow cursor)" : "Manual" })
                 if zoom.mode == .manual {
-                    ManualTargetPicker(target: model.binding(\.scene.zooms[i].manualTarget, "Zoom target"))
-                        .frame(height: 120)
+                    ManualTargetPicker(target: model.item(\.zooms, id, \.manualTarget, fallback: zoom.manualTarget, "Zoom target"),
+                                       level: zoom.level, frame: model.zoomFrames[id], aspect: model.sourceAspect)
+                        .task(id: id) { await model.loadZoomFrame(id) }
+                    Text("Drag to aim. The preview jumps to this zoom so you see the result.")
+                        .font(.system(size: 11)).foregroundStyle(Theme.secondaryText)
                 }
             }
             PanelSection(title: "Animation") {
                 HelpToggle(title: "Instant animation", help: "Cut straight in instead of animating.",
-                           isOn: model.binding(\.scene.zooms[i].instant, "Instant zoom"))
-                HelpToggle(title: "Disabled", isOn: model.binding(\.scene.zooms[i].disabled, "Disable zoom"))
+                           isOn: model.item(\.zooms, id, \.instant, fallback: zoom.instant, "Instant zoom"))
+                HelpToggle(title: "Disabled", isOn: model.item(\.zooms, id, \.disabled, fallback: zoom.disabled, "Disable zoom"))
             }
         }
     }
 }
 
-/// A frame preview with a draggable target dot (snaps to center).
+/// Shows the actual video frame with a rectangle for exactly what the zoom will show.
+/// Drag anywhere to aim the zoom (snaps to the centre lines).
 struct ManualTargetPicker: View {
     @Binding var target: NormPoint
+    var level: Double
+    var frame: NSImage?
+    var aspect: Double
 
     var body: some View {
         GeometryReader { g in
+            let half = 0.5 / max(level, 1)
+            let cx = min(max(target.x, half), 1 - half), cy = min(max(target.y, half), 1 - half)
+            let view = CGRect(x: (cx - half) * g.size.width, y: (cy - half) * g.size.height,
+                              width: 2 * half * g.size.width, height: 2 * half * g.size.height)
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 8).fill(Theme.control)
+                if let frame {
+                    Image(nsImage: frame).resizable().frame(width: g.size.width, height: g.size.height)
+                } else {
+                    RoundedRectangle(cornerRadius: 6).fill(Theme.control)
+                }
+                // Dim what falls outside the zoomed view.
                 Path { p in
-                    p.move(to: CGPoint(x: g.size.width / 2, y: 0)); p.addLine(to: CGPoint(x: g.size.width / 2, y: g.size.height))
-                    p.move(to: CGPoint(x: 0, y: g.size.height / 2)); p.addLine(to: CGPoint(x: g.size.width, y: g.size.height / 2))
-                }.stroke(Color.white.opacity(0.1))
-                Circle().fill(Theme.accentSoft).frame(width: 14, height: 14)
+                    p.addRect(CGRect(origin: .zero, size: g.size))
+                    p.addRect(view)
+                }
+                .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
+                Rectangle().strokeBorder(Theme.accentSoft, lineWidth: 2)
+                    .frame(width: view.width, height: view.height).offset(x: view.minX, y: view.minY)
+                Circle().fill(Theme.accentSoft).frame(width: 10, height: 10)
                     .position(x: target.x * g.size.width, y: target.y * g.size.height)
-                Text("\(Int(target.x * 100))%, \(Int(target.y * 100))%").font(.system(size: 10).monospacedDigit())
-                    .foregroundStyle(Theme.secondaryText).padding(6)
+                Text("\(Int(target.x * 100))%, \(Int(target.y * 100))% · \(String(format: "%.1f", level))×")
+                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(6)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { v in
                 var x = min(max(v.location.x / g.size.width, 0), 1), y = min(max(v.location.y / g.size.height, 0), 1)
-                if abs(x - 0.5) < 0.01 { x = 0.5 }
-                if abs(y - 0.5) < 0.01 { y = 0.5 }
+                if abs(x - 0.5) < 0.02 { x = 0.5 }
+                if abs(y - 0.5) < 0.02 { y = 0.5 }
                 target = NormPoint(x, y)
             })
         }
+        .aspectRatio(aspect, contentMode: .fit)
     }
 }
 
@@ -512,8 +548,7 @@ struct SliceInspector: View {
     var id: ItemID
 
     var body: some View {
-        if let i = model.doc.scene.slices.firstIndex(where: { $0.id == id }) {
-            let slice = model.doc.scene.slices[i]
+        if let slice = model.doc.scene.slices.first(where: { $0.id == id }) {
             InspectorHeader(title: "Clip", model: model)
             PanelSection(title: "Speed") {
                 PillPicker(options: [0.5, 1, 1.5, 2, 3, 4, 8], selection: Binding(get: { slice.speed }, set: { s in
@@ -523,12 +558,12 @@ struct SliceInspector: View {
                     .buttonStyle(SmallButtonStyle())
             }
             PanelSection(title: "Volume") {
-                ResettableSlider(value: model.binding(\.scene.slices[i].volume, "Clip volume"), range: 0...2, defaultValue: 1)
+                ResettableSlider(value: model.item(\.slices, id, \.volume, fallback: slice.volume, "Clip volume"), range: 0...2, defaultValue: 1)
             }
             PanelSection(title: "Cursor") {
-                HelpToggle(title: "Hide cursor in this clip", isOn: model.binding(\.scene.slices[i].hideCursor, "Hide cursor"))
+                HelpToggle(title: "Hide cursor in this clip", isOn: model.item(\.slices, id, \.hideCursor, fallback: slice.hideCursor, "Hide cursor"))
                 HelpToggle(title: "Disable smooth movement", help: "Useful for dropdown menus and precise moves.",
-                           isOn: model.binding(\.scene.slices[i].disableSmoothing, "Smooth movement"))
+                           isOn: model.item(\.slices, id, \.disableSmoothing, fallback: slice.disableSmoothing, "Smooth movement"))
             }
             Text("Source \(timecode(slice.source.start.seconds)) – \(timecode(slice.source.end.seconds))")
                 .font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.secondaryText)
@@ -541,18 +576,18 @@ struct MaskInspector: View {
     var id: ItemID
 
     var body: some View {
-        if let i = model.doc.scene.masks.firstIndex(where: { $0.id == id }) {
+        if let mask = model.doc.scene.masks.first(where: { $0.id == id }) {
             InspectorHeader(title: "Mask", model: model)
             PanelSection(title: "Type") {
-                PillPicker(options: MaskKind.allCases, selection: model.binding(\.scene.masks[i].kind, "Mask type"), label: { $0.rawValue.capitalized })
+                PillPicker(options: MaskKind.allCases, selection: model.item(\.masks, id, \.kind, fallback: mask.kind, "Mask type"), label: { $0.rawValue.capitalized })
             }
             PanelSection(title: "Area") {
-                MaskRectEditor(rect: model.binding(\.scene.masks[i].rect, "Mask area")).frame(height: 130)
+                MaskRectEditor(rect: model.item(\.masks, id, \.rect, fallback: mask.rect, "Mask area")).frame(height: 130)
                 Text("Drag to move. Drag the corner handle to resize.").font(.system(size: 11)).foregroundStyle(Theme.secondaryText)
             }
-            if model.doc.scene.masks[i].kind == .highlight {
+            if mask.kind == .highlight {
                 PanelSection(title: "Dim amount") {
-                    ResettableSlider(value: model.binding(\.scene.masks[i].opacity, "Highlight"), range: 0.1...0.95, defaultValue: 0.7)
+                    ResettableSlider(value: model.item(\.masks, id, \.opacity, fallback: mask.opacity, "Highlight"), range: 0.1...0.95, defaultValue: 0.7)
                 }
             }
         }

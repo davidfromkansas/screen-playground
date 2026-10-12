@@ -40,6 +40,7 @@ let package = Package(
         .testTarget(name: "MotionTests", dependencies: ["Motion"]),
         .testTarget(name: "CompositionTests", dependencies: ["Composition"]),
         .testTarget(name: "RenderTests", dependencies: ["Render", "TestSupport"]),
+        .testTarget(name: "MediaTests", dependencies: ["Media", "TestSupport"]),
         .testTarget(name: "ExportTests", dependencies: ["Export", "TestSupport"]),
     ]
 )

@@ -8,21 +8,34 @@ import Render
 import SwiftUI
 
 /// Renders the edited video live. Shares the evaluator + compositor with export, so what you
-/// see is exactly what you get.
-struct PreviewView: NSViewRepresentable {
+/// see is exactly what you get. This wrapper reads the observable state in `body`, so SwiftUI
+/// re-renders the Metal view on every seek, edit and playback tick (also while paused).
+struct PreviewView: View {
     var model: EditorModel
+
+    var body: some View {
+        PreviewSurface(project: model.project, snapshot: model.snapshot, time: model.time, playing: model.isPlaying,
+                       generation: model.renderGeneration)
+    }
+}
+
+private struct PreviewSurface: NSViewRepresentable {
+    var project: LoadedProject?
+    var snapshot: RenderSnapshot?
+    var time: Double
+    var playing: Bool
+    var generation: Int
 
     func makeNSView(context: Context) -> PreviewNSView {
         let v = PreviewNSView()
-        if let p = model.project { v.renderer.configure(project: p) }
+        if let project { v.renderer.configure(project: project) }
         return v
     }
 
     func updateNSView(_ view: PreviewNSView, context: Context) {
-        _ = model.renderGeneration // observe
-        if let p = model.project, !view.renderer.isConfigured { view.renderer.configure(project: p) }
-        guard let snap = model.snapshot else { return }
-        view.request(snapshot: snap, time: model.time, playing: model.isPlaying)
+        if let project, !view.renderer.isConfigured { view.renderer.configure(project: project) }
+        guard let snapshot else { return }
+        view.request(snapshot: snapshot, time: time, playing: playing)
     }
 }
 

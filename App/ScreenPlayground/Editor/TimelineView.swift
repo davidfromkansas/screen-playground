@@ -19,7 +19,8 @@ struct TimelineView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let duration = max(model.duration, 0.1)
+            let map = TimeMap(slices: model.doc.scene.slices)
+            let duration = max(map.duration, 0.1)
             let pps = max((geo.size.width - 2 * Self.inset) / duration, 1) * model.timelineZoom
             let contentW = duration * pps + 2 * Self.inset
             ScrollView(.horizontal, showsIndicators: model.timelineZoom > 1.01) {
@@ -39,11 +40,9 @@ struct TimelineView: View {
                     if model.doc.scene.masks.isEmpty {
                         hint("Click to add a mask or highlight", y: Self.maskY, h: Self.maskH)
                     }
-                    if let snap = model.snapshot {
-                        clips(snap: snap, pps: pps)
-                        zooms(snap: snap, pps: pps)
-                        masks(snap: snap, pps: pps)
-                    }
+                    clips(map: map, pps: pps)
+                    zooms(map: map, pps: pps)
+                    masks(map: map, pps: pps)
                     Playhead(height: Self.totalH)
                         .offset(x: Self.inset + model.time * pps - Playhead.hitWidth / 2)
                         .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline")).onChanged { v in
@@ -77,11 +76,10 @@ struct TimelineView: View {
 
     // MARK: Clips
 
-    @ViewBuilder func clips(snap: RenderSnapshot, pps: Double) -> some View {
-        let map = snap.timeMap
+    @ViewBuilder func clips(map: TimeMap, pps: Double) -> some View {
         ForEach(Array(map.slices.enumerated()), id: \.element.id) { i, slice in
             let x = Self.inset + map.outputStarts[i] * pps
-            let w = max(slice.outputDuration * pps, 4)
+            let w = max(slice.outputDuration * pps, ClipBlock.gap + 3)
             ClipBlock(model: model, slice: slice, width: w, pps: pps)
                 .frame(width: w, height: Self.clipH)
                 .offset(x: x, y: Self.clipY)
@@ -90,18 +88,30 @@ struct TimelineView: View {
 
     // MARK: Zooms
 
-    @ViewBuilder func zooms(snap: RenderSnapshot, pps: Double) -> some View {
+    @ViewBuilder func zooms(map: TimeMap, pps: Double) -> some View {
         ForEach(model.doc.scene.zooms) { zoom in
-            let ranges = snap.timeMap.outputRanges(for: zoom.source)
+            let ranges = map.outputRanges(for: zoom.source)
             if let first = ranges.first, let last = ranges.last {
                 let x = Self.inset + first.start.seconds * pps
-                let w = max((last.end.seconds - first.start.seconds) * pps, 6)
+                let w = max((last.end.seconds - first.start.seconds) * pps, 14)
                 RangeBlock(model: model, kind: .zoom(zoom.id), color: Theme.zoom, disabled: zoom.disabled,
                            title: "Zoom", subtitle: "\(String(format: "%.1f", zoom.level))× · \(zoom.mode == .auto ? "Auto" : "Manual")\(zoom.style == .loupe ? " · Loupe" : "")",
-                           icon: "plus.magnifyingglass", outputStart: first.start.seconds, outputEnd: last.end.seconds, pps: pps) { start, end in
+                           icon: "plus.magnifyingglass", outputStart: first.start.seconds, outputEnd: last.end.seconds, pps: pps) { start0, end0 in
+                    // Keep zooms side by side: clamp between the neighbouring zooms.
+                    let others = model.doc.scene.zooms.filter { $0.id != zoom.id }.compactMap { z -> (Double, Double)? in
+                        let r = map.outputRanges(for: z.source)
+                        guard let a = r.first, let b = r.last else { return nil }
+                        return (a.start.seconds, b.end.seconds)
+                    }
+                    let lo = others.filter { $0.1 <= first.start.seconds + 0.001 }.map(\.1).max() ?? 0
+                    let hi = others.filter { $0.0 >= last.end.seconds - 0.001 }.map(\.0).min() ?? model.duration
+                    let len = end0 - start0
+                    let movingWhole = abs(len - (last.end.seconds - first.start.seconds)) < 0.0001
+                    var start = max(start0, lo), end = min(end0, hi)
+                    if movingWhole { start = min(max(start0, lo), hi - len); end = start + len }
                     model.update("Move zoom", coalesce: true) { doc in
                         guard let i = doc.scene.zooms.firstIndex(where: { $0.id == zoom.id }),
-                              let s = snap.timeMap.source(at: OutputTime(start))?.time, let e = snap.timeMap.source(at: OutputTime(end))?.time,
+                              let s = map.source(at: OutputTime(start))?.time, let e = map.source(at: OutputTime(end))?.time,
                               e.seconds - s.seconds >= Edits.minimumZoomDuration else { return }
                         doc.scene.zooms[i].source = SourceRange(s, e)
                     }
@@ -128,19 +138,19 @@ struct TimelineView: View {
 
     // MARK: Masks
 
-    @ViewBuilder func masks(snap: RenderSnapshot, pps: Double) -> some View {
+    @ViewBuilder func masks(map: TimeMap, pps: Double) -> some View {
         ForEach(model.doc.scene.masks) { mask in
-            let ranges = snap.timeMap.outputRanges(for: mask.source)
+            let ranges = map.outputRanges(for: mask.source)
             if let first = ranges.first, let last = ranges.last {
                 let x = Self.inset + first.start.seconds * pps
-                let w = max((last.end.seconds - first.start.seconds) * pps, 6)
+                let w = max((last.end.seconds - first.start.seconds) * pps, 14)
                 RangeBlock(model: model, kind: .mask(mask.id), color: Theme.mask, disabled: false,
                            title: mask.kind == .highlight ? "Highlight" : "Mask", subtitle: mask.kind.rawValue.capitalized,
                            icon: mask.kind == .highlight ? "rectangle.inset.filled" : "eye.slash",
                            outputStart: first.start.seconds, outputEnd: last.end.seconds, pps: pps) { start, end in
                     model.update("Move mask", coalesce: true) { doc in
                         guard let i = doc.scene.masks.firstIndex(where: { $0.id == mask.id }),
-                              let s = snap.timeMap.source(at: OutputTime(start))?.time, let e = snap.timeMap.source(at: OutputTime(end))?.time,
+                              let s = map.source(at: OutputTime(start))?.time, let e = map.source(at: OutputTime(end))?.time,
                               e.seconds - s.seconds >= 0.1 else { return }
                         doc.scene.masks[i].source = SourceRange(s, e)
                     }
@@ -164,43 +174,71 @@ struct ClipBlock: View {
     var pps: Double
     @State private var dragBase: Slice?
 
+    @State private var hovering = false
+
     var selected: Bool { model.selection == .slice(slice.id) }
+    /// Visual gap between neighbouring segments so they never read as one bar.
+    static let gap: CGFloat = 3
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Theme.clip.opacity(0.9))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.white : .clear, lineWidth: 2))
-            if width > 70 {
-                VStack(spacing: 1) {
-                    Text("Clip").font(.system(size: 10, weight: .medium)).opacity(0.7)
-                    HStack(spacing: 6) {
-                        Text(durationLabel(slice.outputDuration))
-                        Label(speedLabel(slice.speed), systemImage: "timer").labelStyle(.titleAndIcon)
-                        if slice.hideCursor { Image(systemName: "cursorarrow.slash") }
-                        if slice.volume != 1 { Image(systemName: slice.volume == 0 ? "speaker.slash" : "speaker.wave.1") }
-                    }
-                    .font(.system(size: 11, weight: .semibold))
+            RoundedRectangle(cornerRadius: 7)
+                .fill(slice.speed == 1 ? Theme.clip : Theme.clip.mix(with: .orange, by: 0.25))
+                .brightness(hovering ? 0.05 : 0)
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(selected ? Color.white : .clear, lineWidth: 2))
+            label
+                .foregroundStyle(.black.opacity(0.78))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+            if hovering || selected {
+                HStack(spacing: 0) {
+                    edge(leading: true)
+                    Spacer(minLength: 0)
+                    edge(leading: false)
                 }
-                .foregroundStyle(.black.opacity(0.8))
-            }
-            HStack {
-                edge(leading: true)
-                Spacer()
-                edge(leading: false)
             }
         }
+        .padding(.horizontal, Self.gap / 2)
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .gesture(SpatialTapGesture(coordinateSpace: .named("timeline")).onEnded { v in
             model.selection = .slice(slice.id)
             model.seek((v.location.x - TimelineView.inset) / pps)
         })
         .contextMenu { sliceMenu }
+        .help("\(durationLabel(slice.outputDuration)) · \(speedLabel(slice.speed)) — right-click for speed, volume and more")
+    }
+
+    /// Shows as much as fits: full label, then duration + speed, then speed only.
+    @ViewBuilder var label: some View {
+        let flags = HStack(spacing: 4) {
+            if slice.hideCursor { Image(systemName: "cursorarrow.slash") }
+            if slice.volume != 1 { Image(systemName: slice.volume == 0 ? "speaker.slash" : "speaker.wave.1") }
+        }
+        if width > 120 {
+            VStack(spacing: 1) {
+                Text("Clip").font(.system(size: 10, weight: .medium)).opacity(0.7)
+                HStack(spacing: 6) {
+                    Text(durationLabel(slice.outputDuration))
+                    Label(speedLabel(slice.speed), systemImage: "timer").labelStyle(.titleAndIcon)
+                    flags
+                }
+                .font(.system(size: 11, weight: .semibold))
+            }
+        } else if width > 64 {
+            HStack(spacing: 4) {
+                Text(durationLabel(slice.outputDuration))
+                if slice.speed != 1 { Text(speedLabel(slice.speed)) }
+            }
+            .font(.system(size: 11, weight: .semibold))
+        } else if width > 30, slice.speed != 1 {
+            Text(speedLabel(slice.speed)).font(.system(size: 10, weight: .bold))
+        }
     }
 
     func edge(leading: Bool) -> some View {
-        Rectangle().fill(Color.black.opacity(0.001)).frame(width: 9)
-            .overlay(Capsule().fill(Color.black.opacity(0.35)).frame(width: 3, height: 18))
+        Rectangle().fill(Color.black.opacity(0.001)).frame(width: min(10, max(width / 4, 4)))
+            .overlay(Capsule().fill(Color.black.opacity(0.45)).frame(width: 3, height: 18))
             .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
             .gesture(DragGesture(minimumDistance: 1).onChanged { v in
                 let base = dragBase ?? slice
@@ -280,30 +318,40 @@ struct RangeBlock: View {
     var pps: Double
     var onChange: (Double, Double) -> Void
     @State private var base: (Double, Double)?
+    @State private var hovering = false
 
     var body: some View {
         let selected = model.selection == kind
+        let width = (outputEnd - outputStart) * pps
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 7)
                 .fill(color.opacity(disabled ? 0.35 : 0.95))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.white : .clear, lineWidth: 2))
-            if (outputEnd - outputStart) * pps > 60 {
+                .brightness(hovering ? 0.06 : 0)
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(selected ? Color.white : .clear, lineWidth: 2))
+            if width > 90 {
                 HStack(spacing: 4) {
                     Image(systemName: icon)
                     Text(subtitle).lineLimit(1)
                 }
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white.opacity(disabled ? 0.5 : 0.95))
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
+            } else if width > 26 {
+                Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
             }
-            HStack {
-                handle(leading: true)
-                Spacer()
-                handle(leading: false)
+            if hovering || selected {
+                HStack(spacing: 0) {
+                    handle(leading: true, width: width)
+                    Spacer(minLength: 0)
+                    handle(leading: false, width: width)
+                }
             }
         }
+        .padding(.horizontal, ClipBlock.gap / 2)
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .onTapGesture { model.selection = kind }
+        .help("\(title) · \(subtitle)")
         .gesture(DragGesture(minimumDistance: 3).onChanged { v in
             let b = base ?? (outputStart, outputEnd)
             if base == nil { base = b }
@@ -315,8 +363,8 @@ struct RangeBlock: View {
         }.onEnded { _ in base = nil })
     }
 
-    func handle(leading: Bool) -> some View {
-        Rectangle().fill(Color.black.opacity(0.001)).frame(width: 9)
+    func handle(leading: Bool, width: Double) -> some View {
+        Rectangle().fill(Color.black.opacity(0.001)).frame(width: min(10, max(width / 4, 4)))
             .overlay(Capsule().fill(Color.white.opacity(0.6)).frame(width: 3, height: 14))
             .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
             .gesture(DragGesture(minimumDistance: 1).onChanged { v in
@@ -336,30 +384,33 @@ struct RulerView: View {
 
     var body: some View {
         Canvas { ctx, size in
-            let step = Self.step(pps: pps)
-            var t = 0.0
-            while t <= duration + 0.001 {
+            // Labels on round times (major), with evenly spaced minor ticks between them.
+            let (major, minor) = Self.steps(pps: pps)
+            let count = Int((duration / minor).rounded(.down))
+            let perMajor = max(Int((major / minor).rounded()), 1)
+            for i in 0...max(count, 0) {
+                let t = Double(i) * minor
                 let x = TimelineView.inset + t * pps
-                let major = (t / step).rounded().truncatingRemainder(dividingBy: 5) == 0
+                let isMajor = i % perMajor == 0
                 var p = Path()
-                p.move(to: CGPoint(x: x, y: size.height - (major ? 9 : 5)))
+                p.move(to: CGPoint(x: x, y: size.height - (isMajor ? 9 : 5)))
                 p.addLine(to: CGPoint(x: x, y: size.height))
-                ctx.stroke(p, with: .color(.white.opacity(major ? 0.35 : 0.18)), lineWidth: 1)
-                if major {
-                    let major5 = step * 5
-                    let label = major5 < 1 ? String(format: "%d:%04.1f", Int(t) / 60, t.truncatingRemainder(dividingBy: 60))
+                ctx.stroke(p, with: .color(.white.opacity(isMajor ? 0.35 : 0.18)), lineWidth: 1)
+                if isMajor {
+                    let label = major < 1 ? String(format: "%d:%04.1f", Int(t) / 60, t.truncatingRemainder(dividingBy: 60))
                         : String(format: "%d:%02d", Int(t.rounded()) / 60, Int(t.rounded()) % 60)
                     ctx.draw(Text(label).font(.system(size: 10).monospacedDigit()).foregroundStyle(Theme.secondaryText),
                              at: CGPoint(x: x, y: 7))
                 }
-                t += step
             }
         }
     }
 
-    static func step(pps: Double) -> Double {
-        for s in [0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60] where s * pps >= 14 { return s }
-        return 120
+    /// Major (labelled) step is a round number at least ~70 px apart; minor ticks subdivide it.
+    static func steps(pps: Double) -> (major: Double, minor: Double) {
+        let options: [(Double, Double)] = [(0.5, 0.1), (1, 0.2), (2, 0.5), (5, 1), (10, 2), (15, 5), (30, 5), (60, 10), (120, 30), (300, 60)]
+        for (major, minor) in options where major * pps >= 70 { return (major, minor) }
+        return (600, 120)
     }
 }
 
