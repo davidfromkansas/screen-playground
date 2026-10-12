@@ -32,8 +32,12 @@ struct EditorView: View {
                 HStack(spacing: 14) {
                     LeftToolbar(model: model)
                     VStack(spacing: 10) {
+                        // The preview absorbs any squeeze so the transport bar never overlaps the timeline.
                         PreviewView(model: model)
+                            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                            .layoutPriority(-1)
                         TransportBar(model: model)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     SidebarPanel(model: model)
                         .frame(width: 320)
@@ -42,6 +46,8 @@ struct EditorView: View {
                     .padding(.vertical, 12)
                     .padding(.horizontal, 6)
                     .glass(cornerRadius: Theme.panelRadius)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 14)
@@ -211,15 +217,15 @@ struct TransportBar: View {
             Text(timecode(model.time)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondaryText).frame(width: 64, alignment: .trailing)
             Button { model.seek(0) } label: { Image(systemName: "backward.end.fill") }.buttonStyle(IconButtonStyle())
             Button { model.togglePlay() } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: model.isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(Theme.text))
-                    .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+                    .background(Circle().fill(model.isPlaying ? Theme.record : Theme.success))
+                    .shadow(color: (model.isPlaying ? Theme.record : Theme.success).opacity(0.35), radius: 6, y: 2)
             }
             .buttonStyle(.plain)
-            .help("Play/Pause (Space)")
+            .help(model.isPlaying ? "Stop (Space)" : "Play (Space)")
             Button { model.seek(model.duration) } label: { Image(systemName: "forward.end.fill") }.buttonStyle(IconButtonStyle())
             Text(timecode(model.duration)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondaryText).frame(width: 64, alignment: .leading)
             Button { model.loopPlayback.toggle() } label: { Image(systemName: "repeat") }
