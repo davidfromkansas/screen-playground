@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Builds a notarized, stapled Screen Playground DMG and (optionally) publishes a GitHub Release.
+#
+#   scripts/release.sh 0.1.0            # build + notarize + staple → dist/ScreenPlayground-0.1.0.dmg
+#   scripts/release.sh 0.1.0 --publish  # …and create the GitHub Release with the DMG attached
+#
+# One-time setup (needs a paid Apple Developer account):
+#   1. Xcode › Settings › Accounts: add your Apple ID, then Manage Certificates › + › "Developer ID Application".
+#   2. Create an app-specific password at account.apple.com › Sign-In and Security, then run:
+#        xcrun notarytool store-credentials screen-playground-notary --apple-id YOU@EXAMPLE.COM --team-id TEAMID
+#      (it asks for the app-specific password and keeps it in your keychain).
+set -euo pipefail
+
+VERSION="${1:?usage: scripts/release.sh <version> [--publish]}"
+PUBLISH="${2:-}"
+PROFILE="${NOTARY_PROFILE:-screen-playground-notary}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+IDENTITY_LINE=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 || true)
+[[ -n "$IDENTITY_LINE" ]] || { echo "No 'Developer ID Application' certificate found. See setup step 1 at the top of this script."; exit 1; }
+IDENTITY=$(sed -E 's/.*"(.*)".*/\1/' <<<"$IDENTITY_LINE")
+TEAM=$(sed -E 's/.*\(([A-Z0-9]{10})\)".*/\1/' <<<"$IDENTITY_LINE")
+xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1 || { echo "Notary profile '$PROFILE' not found. See setup step 2."; exit 1; }
+echo "Signing as: $IDENTITY (team $TEAM)"
+
+BUILD="$ROOT/build/ReleaseDevID"
+APP="$BUILD/Build/Products/Release/Screen Playground.app"
+DMG="$ROOT/dist/ScreenPlayground-$VERSION.dmg"
+WORK=$(mktemp -d)
+
+xcodegen generate --quiet
+xcodebuild -project ScreenPlayground.xcodeproj -scheme ScreenPlayground -configuration Release -derivedDataPath "$BUILD" \
+  -destination 'generic/platform=macOS' ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+  MARKETING_VERSION="$VERSION" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$TEAM" \
+  ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS="--timestamp" -quiet build
+codesign --verify --deep --strict --verbose=2 "$APP"
+
+echo "Notarizing the app…"
+ditto -c -k --keepParent "$APP" "$WORK/app.zip"
+xcrun notarytool submit "$WORK/app.zip" --keychain-profile "$PROFILE" --wait
+xcrun stapler staple "$APP"
+
+echo "Building the DMG…"
+STAGE="$WORK/Screen Playground"
+mkdir -p "$STAGE" "$ROOT/dist"
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+cat > "$STAGE/READ ME FIRST.txt" <<EOF
+Screen Playground $VERSION — free screen recorder for Mac (macOS 15 or later)
+
+INSTALL: drag "Screen Playground" onto the Applications folder, then open it.
+
+PERMISSIONS: allow Screen Recording when asked (then quit and reopen the app).
+Microphone, Camera, Accessibility and Input Monitoring are optional.
+
+RECORD: press Option-Command-Return anywhere, pick Display / Window / Area, click Record.
+Press Option-Command-Return again to stop — the editor opens with zooms already added.
+EOF
+rm -f "$DMG"
+hdiutil create -volname "Screen Playground" -srcfolder "$STAGE" -ov -format UDZO "$DMG" -quiet
+codesign --sign "$IDENTITY" --timestamp "$DMG"
+
+echo "Notarizing the DMG…"
+xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+xcrun stapler staple "$DMG"
+
+echo "Gatekeeper check:"
+spctl -a -t open --context context:primary-signature -vv "$DMG"
+spctl -a -vv "$APP"
+shasum -a 256 "$DMG"
+
+if [[ "$PUBLISH" == "--publish" ]]; then
+  gh release create "v$VERSION" "$DMG" --title "Screen Playground $VERSION" --notes-file "$ROOT/docs/release-notes/$VERSION.md"
+fi
+echo "Done: $DMG"
