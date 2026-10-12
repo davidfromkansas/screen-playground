@@ -10,9 +10,7 @@ gen:
 
 build: gen
 	xcodebuild -project ScreenPlayground.xcodeproj -scheme ScreenPlayground -configuration Debug \
-		-derivedDataPath $(DERIVED) -destination 'platform=macOS' build | xcbeautify 2>/dev/null || \
-	xcodebuild -project ScreenPlayground.xcodeproj -scheme ScreenPlayground -configuration Debug \
-		-derivedDataPath $(DERIVED) -destination 'platform=macOS' -quiet build
+		-derivedDataPath $(DERIVED) -destination 'platform=macOS,arch=arm64' -quiet build
 
 pgctl: gen
 	xcodebuild -project ScreenPlayground.xcodeproj -target pgctl -configuration Debug \
