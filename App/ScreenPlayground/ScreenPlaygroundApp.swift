@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ControlServer.shared.start()
             // Clipboard exports are only needed until they're pasted; drop ones older than a day.
             Task.detached(priority: .background) { ClipboardExport.cleanUp() }
-            if !ProcessInfo.processInfo.arguments.contains("-PGNoHome") { AppModel.shared.showHome() }
+            if !ProcessInfo.processInfo.arguments.contains("-PGNoHome") { AppModel.shared.showStartWindow() }
             ComponentGallery.showIfRequested()
         }
     }
@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { MainActor.assumeIsolated { AppModel.shared.showHome() } }
+        if !flag { MainActor.assumeIsolated { AppModel.shared.showStartWindow() } }
         return true
     }
 
@@ -189,9 +189,9 @@ struct SettingsView: View {
                     Text("10 seconds").tag(10)
                 }
                 Toggle("Hide desktop icons while recording", isOn: $hideIcons)
-                LabeledContent("Projects folder") {
-                    Button(app.projectsFolder.path) { NSWorkspace.shared.open(app.projectsFolder) }.buttonStyle(.link)
-                }
+            }
+            Section("Storage") {
+                StorageRow()
             }
             Section("Shortcuts") {
                 LabeledContent("Start / stop recording", value: "⌥⌘↩")
@@ -294,6 +294,60 @@ struct AgentSetupRow: View {
         } catch {
             failed = true
             message = error.localizedDescription
+        }
+    }
+}
+
+/// Settings › Storage: where everything lives, and moving it somewhere else.
+struct StorageRow: View {
+    @Environment(AppModel.self) private var app
+    @State private var message: String?
+
+    var body: some View {
+        let storage = app.storage
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent("Location") {
+                HStack {
+                    Text(StorageLocation.displayPath(storage.root, home: StorageLocation.home))
+                        .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                    Button("Show in Finder") { NSWorkspace.shared.open(storage.root) }
+                    Button("Change…") { change(from: storage) }
+                }
+            }
+            if let service = StorageLocation.cloudService(for: storage.root) {
+                Text("This folder syncs to \(service); recordings use \(service) storage.").font(.system(size: 11)).foregroundStyle(.orange)
+            }
+            if let message { Text(message).font(.system(size: 11)).foregroundStyle(.secondary) }
+        }
+    }
+
+    private func change(from old: StorageLocation) {
+        guard !app.recorder.isRecording else { message = "Finish the recording first."; return }
+        guard !app.hasOpenProjects else { message = "Close open projects first, then try again."; return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        panel.message = "Choose a new place for your recordings. A ScreenPlayground folder is created inside it."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let new = StorageLocation(root: StorageLocation.root(inside: url), layout: .standard)
+        guard new.root.standardizedFileURL != old.root.standardizedFileURL else { return }
+        let count = app.recents.count
+        let alert = NSAlert()
+        alert.messageText = "Move your recordings to \(StorageLocation.displayPath(new.root, home: StorageLocation.home))?"
+        alert.informativeText = count == 0 ? "New recordings will be saved there."
+            : "Your \(count) project\(count == 1 ? "" : "s"), exports and presets will be moved there. Close any open projects first."
+        alert.addButton(withTitle: "Move")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            let moved = try StorageLocation.move(from: old, to: new)
+            app.storageChanged()
+            message = "Moved \(moved) project\(moved == 1 ? "" : "s")."
+        } catch {
+            app.storageChanged()
+            AppModel.shared.presentError(error)
         }
     }
 }

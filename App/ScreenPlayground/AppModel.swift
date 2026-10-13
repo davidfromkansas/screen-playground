@@ -16,18 +16,75 @@ final class AppModel {
     private var editorWindows: [URL: NSWindowController] = [:]
     private var homeWindow: NSWindowController?
 
+    /// Bumped when the storage location changes so views showing paths refresh.
+    private(set) var storageGeneration = 0
+
+    var storage: StorageLocation { _ = storageGeneration; return StorageLocation.current }
+
+    /// Nothing is created on disk until a location has been chosen (or a recording starts; see `ensureStorage`).
     var projectsFolder: URL {
-        let url = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Screen Playground/Projects", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        let url = storage.projects
+        if StorageLocation.resolution != .needsChoice {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
         return url
     }
 
     var exportsFolder: URL {
-        let url = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Screen Playground", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        let url = storage.exports
+        if StorageLocation.resolution != .needsChoice {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
         return url
+    }
+
+    /// Called before writing a recording: if nobody has chosen yet (an agent started one before the
+    /// welcome screen was answered), adopt the default location.
+    func ensureStorage() throws {
+        guard StorageLocation.resolution == .needsChoice, !ProcessInfo.processInfo.arguments.contains("-PGOnboarding") else { return }
+        try StorageLocation.choose(StorageLocation.current)
+        storageChanged()
+    }
+
+    var hasOpenProjects: Bool { !editorWindows.isEmpty }
+
+    func storageChanged() {
+        storageGeneration += 1
+        reloadRecents()
+    }
+
+    // MARK: First launch
+
+    private var welcomeWindow: NSWindowController?
+
+    /// Shows the welcome screen when nobody has chosen where to store recordings yet; otherwise Home.
+    func showStartWindow() {
+        guard StorageLocation.resolution == .needsChoice else { showHome(); return }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 640),
+                              styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.title = "Welcome to Screen Playground"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.backgroundColor = NSColor(Theme.stage)
+        window.contentView = NSHostingView(rootView: WelcomeView { [weak self] location in
+            guard let self else { return }
+            do {
+                try StorageLocation.choose(location)
+                self.storageChanged()
+                self.welcomeWindow?.close()
+                self.welcomeWindow = nil
+                self.showHome()
+            } catch {
+                self.presentError(error)
+            }
+        }.preferredColorScheme(.light))
+        window.center()
+        welcomeWindow = NSWindowController(window: window)
+        welcomeWindow?.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate()
     }
 
     init() { reloadRecents() }

@@ -16,9 +16,10 @@ enum PresetStore {
     static var folderOverride: URL?
 
     static var folder: URL {
-        let dir = folderOverride ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Screen Playground/Presets", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dir = folderOverride ?? StorageLocation.current.presets
+        if folderOverride != nil || StorageLocation.resolution != .needsChoice {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
         return dir
     }
 

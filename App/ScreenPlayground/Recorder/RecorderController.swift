@@ -196,6 +196,7 @@ final class RecorderController {
         options.hideDesktopIcons = hideDesktopIcons
         if windows.isEmpty { refreshWindows() }
         let name = automation?.name ?? Self.recordingName(for: target, windows: windows)
+        if automation?.folder == nil { try AppModel.shared.ensureStorage() }
         let url = ProjectBundle.uniqueURL(in: automation?.folder ?? AppModel.shared.projectsFolder, name: name)
         marks = []
         do {
