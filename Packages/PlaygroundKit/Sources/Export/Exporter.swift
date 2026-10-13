@@ -263,4 +263,18 @@ public enum ClipboardExport {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
+
+    /// Deletes clipboard exports older than `age` seconds (default one day). Returns how many were removed.
+    @discardableResult
+    public static func cleanUp(olderThan age: TimeInterval = 24 * 60 * 60, now: Date = Date(), in dir: URL? = nil) -> Int {
+        let fm = FileManager.default
+        let dir = dir ?? folder
+        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return 0 }
+        var removed = 0
+        for file in files {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? now
+            if now.timeIntervalSince(modified) > age, (try? fm.removeItem(at: file)) != nil { removed += 1 }
+        }
+        return removed
+    }
 }

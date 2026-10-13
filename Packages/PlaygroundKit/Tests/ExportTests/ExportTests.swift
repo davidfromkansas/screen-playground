@@ -113,4 +113,16 @@ import Timeline
         try await Exporter(project: project, document: project.document, settings: settings).run(to: loud)
         #expect(try await AVURLAsset(url: loud).loadTracks(withMediaType: .audio).count == 1)
     }
+
+    @Test func clipboardExportsOlderThanADayAreRemoved() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("clip-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let old = dir.appendingPathComponent("old.mp4"), fresh = dir.appendingPathComponent("fresh.mp4")
+        try Data([1]).write(to: old)
+        try Data([1]).write(to: fresh)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-25 * 3600)], ofItemAtPath: old.path)
+        #expect(ClipboardExport.cleanUp(in: dir) == 1)
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+        #expect(FileManager.default.fileExists(atPath: fresh.path))
+    }
 }

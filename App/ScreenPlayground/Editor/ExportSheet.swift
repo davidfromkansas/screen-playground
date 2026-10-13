@@ -122,6 +122,7 @@ struct ExportSheet: View {
         let base = model.doc.name.replacingOccurrences(of: "/", with: "-")
         let url: URL
         if toClipboard {
+            ClipboardExport.cleanUp()
             url = ClipboardExport.folder.appendingPathComponent("\(base).\(settings.format.fileExtension)")
         } else {
             let panel = NSSavePanel()

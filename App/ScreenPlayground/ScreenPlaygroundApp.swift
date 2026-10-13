@@ -45,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             HotKeys.shared.register()
             AppModel.shared.recoverUnfinishedRecordings()
             ControlServer.shared.start()
+            // Clipboard exports are only needed until they're pasted; drop ones older than a day.
+            Task.detached(priority: .background) { ClipboardExport.cleanUp() }
             if !ProcessInfo.processInfo.arguments.contains("-PGNoHome") { AppModel.shared.showHome() }
             ComponentGallery.showIfRequested()
         }
