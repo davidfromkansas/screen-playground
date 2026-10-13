@@ -17,6 +17,7 @@ struct HomeView: View {
                 .padding(12)
             mainContent
         }
+        .overlay(alignment: .bottomTrailing) { UpdateToast().padding(24) }
         .frame(minWidth: 860, minHeight: 540)
         .background(Theme.stage.ignoresSafeArea())
         .preferredColorScheme(.light)

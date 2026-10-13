@@ -42,7 +42,7 @@ enum LiveCommands {
             return """
             Screen Playground \(r["version"]?.string ?? "?") — \(r["recording"]?.bool == true ? "recording" : "ready")
             permissions: \(perms)
-            projects:    \(r["projectsFolder"]?.string ?? "")
+            projects:    \(r["projectsFolder"]?.string ?? "")\(r["update"]?["available"]?.bool == true ? "\nupdate:      \(r["update"]?["version"]?.string ?? "") available" : "")
             """
         }
     }

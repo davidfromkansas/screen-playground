@@ -83,7 +83,39 @@ spctl -a -t open --context context:primary-signature -vv "$DMG"
 spctl -a -vv "$APP"
 shasum -a 256 "$DMG"
 
+# The update feed the app checks (served by GitHub Pages from site/updates/latest.json).
+FEED="$ROOT/site/updates/latest.json"
+mkdir -p "$(dirname "$FEED")"
+python3 - "$VERSION" "$DMG" "$ROOT/docs/release-notes/$VERSION.md" "$FEED" <<'PY'
+import hashlib, json, os, re, sys, datetime
+version, dmg, notes_file, out = sys.argv[1:5]
+notes = []
+if os.path.exists(notes_file):
+    for line in open(notes_file):
+        m = re.match(r"^- \*\*(.+?)\*\*\s*(.*)", line.strip())
+        if m and len(notes) < 5:
+            text = (m.group(1).rstrip(".") + ". " + m.group(2)).strip()
+            text = re.sub(r"\*|`|\[([^\]]+)\]\([^)]+\)", lambda x: x.group(1) or "", text)
+            notes.append(text[:160].rstrip() + ("…" if len(text) > 160 else ""))
+feed = {
+    "version": version,
+    "released": datetime.date.today().strftime("%b %-d, %Y"),
+    "dmg": f"https://github.com/davidfromkansas/screen-playground/releases/download/v{version}/ScreenPlayground-{version}.dmg",
+    "size": os.path.getsize(dmg),
+    "sha256": hashlib.sha256(open(dmg, "rb").read()).hexdigest(),
+    "notes": notes,
+    "notesURL": f"https://github.com/davidfromkansas/screen-playground/releases/tag/v{version}",
+    "minimumSystem": "15.0",
+}
+json.dump(feed, open(out, "w"), indent=2)
+print("update feed:", out)
+PY
+
 if [[ "$PUBLISH" == "--publish" ]]; then
   gh release create "v$VERSION" "$DMG" --title "Screen Playground $VERSION" --notes-file "$ROOT/docs/release-notes/$VERSION.md"
+  # Publishing the feed is what tells installed copies about the new version.
+  git -C "$ROOT" add site/updates/latest.json
+  git -C "$ROOT" commit -m "Update feed: $VERSION" site/updates/latest.json
+  git -C "$ROOT" push
 fi
 echo "Done: $DMG"

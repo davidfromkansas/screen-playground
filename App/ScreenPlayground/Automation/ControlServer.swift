@@ -110,7 +110,18 @@ enum ControlCommands {
             "permissions": .object(permissions),
             "projectsFolder": .string(AppModel.shared.projectsFolder.path),
             "recording": .bool(recorder.session != nil),
+            "update": updateInfo(),
         ]
+    }
+
+    static func updateInfo() -> JSONValue {
+        let u = UpdateChecker.shared
+        switch u.state {
+        case let .ready(feed, _): return ["available": true, "version": .string(feed.version), "ready": true]
+        case let .downloading(feed, _): return ["available": true, "version": .string(feed.version), "ready": false]
+        case let .failed(feed?, _): return ["available": true, "version": .string(feed.version), "ready": false]
+        default: return ["available": false]
+        }
     }
 
     static func targets() -> JSONValue {

@@ -137,7 +137,9 @@ struct ExportSheet: View {
         cancel = CancelToken()
         let exporter = Exporter(project: project, document: model.doc, settings: settings)
         let token = cancel
+        ExportActivity.running += 1
         Task {
+            defer { ExportActivity.running -= 1 }
             do {
                 try await exporter.run(to: url, cancel: token) { p in
                     Task { @MainActor in progress = p.fraction }

@@ -13,6 +13,9 @@ struct ScreenPlaygroundApp: App {
             SettingsView().environment(AppModel.shared).preferredColorScheme(.light)
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await UpdateChecker.shared.check(manual: true) } }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Recording…") { AppModel.shared.recorder.showPicker() }
                     .keyboardShortcut(.return, modifiers: [.command, .option])
@@ -45,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             HotKeys.shared.register()
             AppModel.shared.recoverUnfinishedRecordings()
             ControlServer.shared.start()
+            UpdateChecker.shared.start()
             // Clipboard exports are only needed until they're pasted; drop ones older than a day.
             Task.detached(priority: .background) { ClipboardExport.cleanUp() }
             if !ProcessInfo.processInfo.arguments.contains("-PGNoHome") { AppModel.shared.showStartWindow() }
@@ -64,7 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if !Self.isHostingTests { ControlServer.shared.stop() }
+        if !Self.isHostingTests {
+            ControlServer.shared.stop()
+            MainActor.assumeIsolated { UpdateChecker.shared.installIfDeferred() }
+        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -148,6 +155,9 @@ final class StatusItemController: NSObject {
             menu.addItem(.separator())
         }
         menu.addItem(ActionItem("Show Projects") { AppModel.shared.showHome() })
+        if let feed = UpdateChecker.shared.readyFeed {
+            menu.addItem(ActionItem("Restart to Update to \(feed.version)") { UpdateChecker.shared.restartNow() })
+        }
         menu.addItem(ActionItem("Open Clipboard Exports") { NSWorkspace.shared.open(ClipboardExport.folder) })
         if includeQuit {
             menu.addItem(.separator())
@@ -201,6 +211,9 @@ struct SettingsView: View {
             }
             Section("Agents & command line") {
                 AgentSetupRow()
+            }
+            Section("Updates") {
+                UpdatesRow()
             }
             Section("Permissions") {
                 ForEach(Permission.allCases) { p in
@@ -349,5 +362,31 @@ struct StorageRow: View {
             app.storageChanged()
             AppModel.shared.presentError(error)
         }
+    }
+}
+
+/// Settings › Updates.
+struct UpdatesRow: View {
+    @Bindable var updates = UpdateChecker.shared
+
+    var body: some View {
+        Toggle("Check for updates automatically", isOn: Binding(get: { updates.automatic }, set: { updates.automatic = $0 }))
+        LabeledContent("Version \(updates.currentVersion)") {
+            HStack {
+                switch updates.state {
+                case .checking: ProgressView().controlSize(.small)
+                case let .downloading(feed, p): Text("Downloading \(feed.version)… \(Int(p * 100))%").foregroundStyle(.secondary)
+                case let .ready(feed, _): Button("Restart to Update to \(feed.version)") { updates.restartNow() }
+                default:
+                    if let last = updates.lastChecked {
+                        Text("Checked \(last.formatted(.relative(presentation: .named)))").foregroundStyle(.secondary)
+                    }
+                }
+                Button("Check Now") { Task { await updates.check(manual: true) } }
+                    .disabled(updates.state == .checking)
+            }
+        }
+        Text("Checks the Screen Playground website for a newer version. Nothing about you or your recordings is sent.")
+            .font(.system(size: 11)).foregroundStyle(.secondary)
     }
 }
