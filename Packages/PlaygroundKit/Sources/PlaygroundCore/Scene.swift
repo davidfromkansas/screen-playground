@@ -136,4 +136,20 @@ public struct Scene: Hashable, Codable, Sendable, Identifiable {
     public var hiddenShortcutIndices: Set<Int> = []
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey { case id, name, slices, zooms, layouts, masks, captions, hiddenShortcutIndices }
+
+    /// Scenes live in an array, which TolerantJSON can't fill with defaults, so every field is optional
+    /// here: projects saved by older versions (no `captions`, …) still open.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(ItemID.self, forKey: .id) ?? makeItemID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Default"
+        slices = try c.decodeIfPresent([Slice].self, forKey: .slices) ?? []
+        zooms = try c.decodeIfPresent([ZoomRange].self, forKey: .zooms) ?? []
+        layouts = try c.decodeIfPresent([LayoutRange].self, forKey: .layouts) ?? []
+        masks = try c.decodeIfPresent([MaskRange].self, forKey: .masks) ?? []
+        captions = try c.decodeIfPresent([CaptionRange].self, forKey: .captions) ?? []
+        hiddenShortcutIndices = try c.decodeIfPresent(Set<Int>.self, forKey: .hiddenShortcutIndices) ?? []
+    }
 }

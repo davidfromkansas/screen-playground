@@ -6,6 +6,8 @@ import SwiftUI
 
 struct EditorView: View {
     @Bindable var model: EditorModel
+    /// Aspect locked in crop mode (nil = free).
+    @State private var cropAspect: Double?
 
     var body: some View {
         Group {
@@ -33,11 +35,23 @@ struct EditorView: View {
                     LeftToolbar(model: model)
                     VStack(spacing: 10) {
                         // The preview absorbs any squeeze so the transport bar never overlaps the timeline.
-                        PreviewView(model: model)
-                            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                            .layoutPriority(-1)
-                        TransportBar(model: model)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Group {
+                            if model.isCropping {
+                                CropEditor(model: model, lockedAspect: cropAspect)
+                            } else {
+                                PreviewView(model: model)
+                            }
+                        }
+                        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                        .layoutPriority(-1)
+                        Group {
+                            if model.isCropping {
+                                CropToolbar(model: model, lockedAspect: $cropAspect)
+                            } else {
+                                TransportBar(model: model)
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                     SidebarPanel(model: model)
                         .frame(width: 320)
@@ -132,16 +146,17 @@ struct PreviewToolbar: View {
                 .menuStyle(.borderlessButton).fixedSize()
                 .padding(.horizontal, 14).frame(height: 40)
                 .glass()
-            Menu {
-                Button("Remove browser toolbar (top 8%)") { model.update("Crop") { $0.config.output.crop = NormRect(x: 0, y: 0.08, width: 1, height: 0.92) } }
-                Button("Crop to center 16:9") { model.update("Crop") { $0.config.output.crop = Self.centerCrop(model: model, aspect: 16.0 / 9) } }
-                Button("Crop to center square") { model.update("Crop") { $0.config.output.crop = Self.centerCrop(model: model, aspect: 1) } }
-                Divider()
-                Button("Reset crop") { model.update("Crop") { $0.config.output.crop = .full } }
-            } label: { Label("Crop", systemImage: "crop") }
-                .menuStyle(.borderlessButton).fixedSize()
-                .padding(.horizontal, 14).frame(height: 40)
-                .glass()
+            Button {
+                if model.isCropping { model.commitCrop() } else { model.beginCrop() }
+            } label: {
+                Label(model.isCropping ? "Done" : "Crop", systemImage: model.isCropping ? "checkmark" : "crop")
+                    .foregroundStyle(model.isCropping ? Theme.accentSoft : Theme.text)
+                    .padding(.horizontal, 14).frame(height: 40)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(PressableStyle())
+            .glass()
+            .help(model.isCropping ? "Apply the crop (Return)" : "Crop the recording")
         }
         .font(.system(size: 13, weight: .medium))
     }
@@ -263,7 +278,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
-        window.contentView = NSHostingView(rootView: EditorView(model: model))
+        let hosting = NSHostingView(rootView: EditorView(model: model))
+        hosting.sizingOptions = [] // the window's size is the person's choice, never the content's
+        window.contentView = hosting
         window.center()
         window.setFrameAutosaveName("EditorWindow")
         installKeyMonitor()
@@ -292,6 +309,14 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             if mods == .command, e.charactersIgnoringModifiers == "c" { self.copyFrame(); return nil }
             if mods == .command, e.charactersIgnoringModifiers == "s" { m.save(); return nil }
             guard mods.isEmpty || mods == .shift else { return e }
+            if m.isCropping {
+                switch e.keyCode {
+                case 36, 76: m.commitCrop()  // return
+                case 53: m.cancelCrop()      // esc
+                default: break
+                }
+                return nil // other editing keys are off while cropping
+            }
             switch e.keyCode {
             case 49: m.togglePlay()                                  // space
             case 123: m.step(mods == .shift ? -1 : -1.0 / 30)        // ←

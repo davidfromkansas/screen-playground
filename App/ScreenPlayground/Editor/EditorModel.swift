@@ -97,6 +97,7 @@ final class EditorModel {
             time = min(p.document.editor.playheadSource, snapshot?.duration ?? 0)
             renderGeneration += 1
             if UserDefaults.standard.bool(forKey: "PGOpenExport") { exportPresented = true } // debug/screenshot hook
+            if UserDefaults.standard.bool(forKey: "PGOpenCrop") { beginCrop() } // debug/screenshot hook
         } catch {
             loadError = error.localizedDescription
         }
@@ -156,6 +157,44 @@ final class EditorModel {
     }
 
     /// Loads the recorded frame in the middle of a zoom for its target picker.
+    // MARK: Crop mode
+
+    /// The crop being edited (normalized to the full recording); non-nil while crop mode is on.
+    var cropDraft: NormRect?
+    /// The full, uncropped frame at the playhead, shown while cropping.
+    private(set) var cropFrame: NSImage?
+    var isCropping: Bool { cropDraft != nil }
+
+    func beginCrop() {
+        if isPlaying { togglePlay() }
+        selection = nil
+        cropDraft = doc.config.output.crop
+        cropFrame = nil
+        guard let p = project, let url = p.displayURL else { return }
+        let source = snapshot?.timeMap.source(at: OutputTime(time))?.time.seconds ?? 0
+        Task {
+            let gen = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+            gen.maximumSize = CGSize(width: 2400, height: 2400)
+            gen.requestedTimeToleranceBefore = .zero
+            gen.requestedTimeToleranceAfter = CMTime(seconds: 0.25, preferredTimescale: 600)
+            if let (cg, _) = try? await gen.image(at: CMTime(seconds: source, preferredTimescale: 600)), isCropping {
+                cropFrame = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            }
+        }
+    }
+
+    func commitCrop() {
+        guard let draft = cropDraft else { return }
+        if draft != doc.config.output.crop { update("Crop") { $0.config.output.crop = draft } }
+        cropDraft = nil
+        cropFrame = nil
+    }
+
+    func cancelCrop() {
+        cropDraft = nil
+        cropFrame = nil
+    }
+
     func loadZoomFrame(_ id: ItemID) async {
         guard zoomFrames[id] == nil, let p = project, let url = p.displayURL,
               let z = doc.scene.zooms.first(where: { $0.id == id }) else { return }

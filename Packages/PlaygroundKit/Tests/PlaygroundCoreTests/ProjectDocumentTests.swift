@@ -66,4 +66,21 @@ import Testing
         let p = r.normalize(x: 200, y: 100)
         #expect(p == NormPoint(0.5, 0.5))
     }
+
+    /// Regression: 0.3.0 couldn't open projects saved before scenes had `captions`.
+    @Test func projectsFromOlderVersionsStillOpen() throws {
+        var doc = ProjectDocument()
+        doc.scene.slices = [Slice(source: SourceRange(0, 5))]
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var json = try JSONSerialization.jsonObject(with: encoder.encode(doc)) as! [String: Any]
+        var scenes = json["scenes"] as! [[String: Any]]
+        scenes[0].removeValue(forKey: "captions")
+        scenes[0].removeValue(forKey: "hiddenShortcutIndices")
+        json["scenes"] = scenes
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let loaded = try TolerantJSON.decode(ProjectDocument.self, from: data, defaults: ProjectDocument())
+        #expect(loaded.scene.slices.count == 1)
+        #expect(loaded.scene.captions.isEmpty)
+    }
 }
