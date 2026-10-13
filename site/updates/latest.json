@@ -1,0 +1,16 @@
+{
+  "version": "0.3.0",
+  "released": "Oct 12, 2026",
+  "dmg": "https://github.com/davidfromkansas/screen-playground/releases/download/v0.3.0/ScreenPlayground-0.3.0.dmg",
+  "size": 7739672,
+  "sha256": "7273229aa4c2e095ee410ef6d8f58f8de980b7263ab02e11af267913c507f3aa",
+  "notes": [
+    "Prompt a demo video. Ask Claude Code, the Claude app or Codex for something like \"make a 20-second demo of the signup flow\".",
+    "One-click setup. Go to Settings \u203a Agents & command line and click Set Up\u2026 next to Claude Code, the Claude app or Codex.",
+    "pgctl, the command-line tool, ships inside the app. It can record, run demo scripts, add captions and zooms, cut, render review frames and export. Every command\u2026",
+    "Captions. Add captions on the new timeline lane, or let agents add them. Keyboard shortcut overlays move up so they never collide.",
+    "Choose where everything is saved. On first launch, a welcome screen shows where recordings will go (~/ScreenPlayground by default) and lets you pick another fol\u2026"
+  ],
+  "notesURL": "https://github.com/davidfromkansas/screen-playground/releases/tag/v0.3.0",
+  "minimumSystem": "15.0"
+}
