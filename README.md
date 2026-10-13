@@ -2,7 +2,7 @@
 
 A free, native macOS app for beautiful screen recordings: auto-zoom, a smooth re-rendered cursor, motion blur, wallpapers, a webcam overlay, and one-click MP4/GIF export. It is a clone of the feature set in [docs/FEATURES.md](docs/FEATURES.md).
 
-**Website and download:** https://davidfromkansas.github.io/screen-playground/
+**Website and download:** https://www.davidfromkansas.com/screenplayground/
 
 ## Let AI agents make demo videos
 

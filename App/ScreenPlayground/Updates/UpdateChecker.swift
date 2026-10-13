@@ -197,7 +197,7 @@ final class UpdateChecker {
     }
 
     func openDownloadInstead(_ feed: UpdateFeed?) {
-        NSWorkspace.shared.open(feed?.notesURL ?? URL(string: "https://davidfromkansas.github.io/screen-playground/")!)
+        NSWorkspace.shared.open(feed?.notesURL ?? URL(string: "https://www.davidfromkansas.com/screenplayground/")!)
     }
 
     // MARK: Alerts for manual checks

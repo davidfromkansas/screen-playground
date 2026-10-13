@@ -117,5 +117,7 @@ if [[ "$PUBLISH" == "--publish" ]]; then
   git -C "$ROOT" add site/updates/latest.json
   git -C "$ROOT" commit -m "Update feed: $VERSION" site/updates/latest.json
   git -C "$ROOT" push
+  # Refresh the landing page on davidfromkansas.com/screenplayground.
+  "$ROOT/scripts/publish-site.sh"
 fi
 echo "Done: $DMG"

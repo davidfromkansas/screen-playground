@@ -24,8 +24,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # The landing page lives at www.davidfromkansas.com/screenplayground (scripts/publish-site.sh).
+      # This address keeps the app's update feed and redirects everything else there.
+      - name: Assemble redirect + update feed
+        run: |
+          mkdir -p out
+          cp -R site/updates out/updates
+          cat > out/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Screen Playground</title>
+          <link rel="canonical" href="https://www.davidfromkansas.com/screenplayground/">
+          <meta http-equiv="refresh" content="0; url=https://www.davidfromkansas.com/screenplayground/">
+          <script>location.replace("https://www.davidfromkansas.com/screenplayground/" + location.hash)</script>
+          </head><body><p>Screen Playground has moved to
+          <a href="https://www.davidfromkansas.com/screenplayground/">davidfromkansas.com/screenplayground</a>.</p></body></html>
+          HTML
+          cp out/index.html out/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: out
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -37,7 +37,7 @@ enum ControlClient {
     private static func launchApp() throws {
         guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Control.releaseBundleID) ?? bundledAppURL() else {
             throw ControlError("app-not-installed", "Screen Playground isn't installed.",
-                               fix: "Download it from https://davidfromkansas.github.io/screen-playground/ and move it to Applications.")
+                               fix: "Download it from https://www.davidfromkansas.com/screenplayground/ and move it to Applications.")
         }
         let open = Process()
         open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
