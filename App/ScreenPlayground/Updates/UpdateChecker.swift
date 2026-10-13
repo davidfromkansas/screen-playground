@@ -60,6 +60,15 @@ final class UpdateChecker {
             UserDefaults.standard.removeObject(forKey: Keys.installing)
             if installed == currentVersion { justUpdatedTo = installed; toastVisible = true }
         }
+        #if DEBUG
+        if let v = UserDefaults.standard.string(forKey: "PGPreviewUpdateToast") { // QA: show the ready toast
+            let feed = UpdateFeed(version: v, dmg: URL(fileURLWithPath: "/dev/null"), size: 7_800_000, sha256: "",
+                                  notes: ["Crop by dragging.", "Projects from earlier versions open again."])
+            state = .ready(feed, URL(fileURLWithPath: "/dev/null"))
+            toastVisible = true
+            return
+        }
+        #endif
         schedule()
         if automatic { Task { await check(manual: false) } }
     }

@@ -33,22 +33,7 @@ struct UpdateToast: View {
                 return AnyView(row(icon: "clock", tint: Theme.text, background: Theme.text.opacity(0.06),
                                    title: "\(feed.version) is ready", detail: "We'll ask again after you finish — nothing will interrupt it.") { EmptyView() } trailing: { EmptyView() })
             }
-            return AnyView(VStack(alignment: .leading, spacing: 12) {
-                row(icon: "checkmark", tint: Color(red: 0.12, green: 0.48, blue: 0.22), background: Theme.success.opacity(0.16),
-                    title: "Screen Playground \(feed.version) is ready",
-                    detail: "Restart now to finish updating. Your projects and settings are kept.") { EmptyView() } trailing: { EmptyView() }
-                    .padding(.bottom, -12)
-                HStack(spacing: 6) {
-                    Button("What's new") { updates.whatsNewPresented = true }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.text.opacity(0.8)).padding(.horizontal, 6)
-                    Button("Later") { updates.later() }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.text.opacity(0.8)).padding(.horizontal, 6)
-                    Spacer()
-                    Button("Restart Now") { updates.restartNow() }.buttonStyle(PrimaryButtonStyle())
-                }
-                .padding(.leading, 48)
-                .padding([.horizontal, .bottom], 16)
-            })
+            return AnyView(readyCard(feed))
         case let .failed(feed, _):
             guard let feed else { return nil }
             return AnyView(row(icon: "arrow.down.circle", tint: Theme.accentSoft, background: Theme.accent.opacity(0.13),
@@ -61,6 +46,36 @@ struct UpdateToast: View {
         default:
             return nil
         }
+    }
+
+    /// "X is ready": icon, title and detail, then the actions — laid out without any overflow
+    /// (content drawn outside a Liquid Glass shape renders mirrored on macOS 26).
+    func readyCard(_ feed: UpdateFeed) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.12, green: 0.48, blue: 0.22))
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.success.opacity(0.16)))
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Screen Playground \(feed.version) is ready").font(.system(size: 14, weight: .semibold))
+                    Text("Restart now to finish updating. Your projects and settings are kept.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 14) {
+                    Button("What's new") { updates.whatsNewPresented = true }
+                    Button("Later") { updates.later() }
+                    Spacer(minLength: 8)
+                    Button("Restart Now") { updates.restartNow() }.buttonStyle(PrimaryButtonStyle())
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.text.opacity(0.8))
+            }
+        }
+        .padding(16)
     }
 
     func row<Extra: View, Trailing: View>(icon: String, tint: Color, background: Color, title: String, detail: String?,
